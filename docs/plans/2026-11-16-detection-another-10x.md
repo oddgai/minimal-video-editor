@@ -1,65 +1,60 @@
-# Chapter Detection Another 10x Implementation Plan
+# チャプター検出をさらに10倍高速化する実装計画
 
-> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
+> **エージェントで作業する場合:** この計画をタスク単位で進める。手順にはチェックボックスを使う。
 
-**Goal:** Reduce cold fast-scan time by at least another 10x on the two user-provided videos while retaining the same detected boundaries.
+**目標:** ユーザーが指定した2本の動画で、検出境界を変えずに初回の高速走査時間をさらに10分の1にする。
 
-**Architecture:** Use compressed MP4 sample-size minima near keyframes to plan a small set of windows. Inspect those windows with four concurrent H.264 decoders that skip non-reference frames, then run the existing full decoder only for windows where the fast pass finds no boundary. Precise full-video scanning remains available.
+**構成:** MP4の圧縮サンプルサイズの局所最小値を使い、キーフレーム付近に少数の候補窓を作る。参照フレームをスキップするH.264デコーダー4つで候補窓を並列に調べ、高速処理で境界が見つからなかった窓だけを既存の全フレームデコーダーで再走査する。精密な全動画走査も引き続き利用できる。
 
-**Tech Stack:** Rust, FFmpeg, Tauri, pnpm; no new dependencies.
+**技術:** Rust、FFmpeg、Tauri、pnpm。依存追加なし。
 
-**Spec:** User goal `detect chapterをあと10倍高速化して`; prior benchmark artifacts under `.superpowers/tenfold/`.
+**仕様:** ユーザー要望`チャプター検出をあと10倍高速化して`。以前のベンチマーク成果物は`.superpowers/tenfold/`以下。
 
-## Global Constraints
+## 全体制約
 
-- Preserve the precise full-scan path and its existing detector thresholds.
-- Keep video files read-only and do not retain decoded frames after a scan.
-- Cancellation must stop and reap every active FFmpeg process.
-- Use pnpm for JavaScript package commands.
-- Compare cold scans against the saved 4-thread baseline with the same two input files.
+- 精密な全走査経路と既存の検出閾値を維持する。
+- 動画ファイルは読み取り専用とし、走査後に復号フレームを保持しない。
+- キャンセル時は実行中のFFmpegプロセスをすべて停止・回収する。
+- JavaScriptのパッケージ操作ではpnpmを使う。
+- 同じ2ファイルを使い、保存済みの4スレッド基準値と初回走査を比較する。
 
-## Review Focus
+## レビュー時の重点
 
-- Concurrent cancellation: cancel must kill and reap all active children.
-- Sparse-reference H.264 output: fast-pass boundaries must remain on the source timeline.
-- Candidate-free supported MP4: return quickly in fast mode; precise mode must still inspect the whole file.
-- Unsupported/fragmented MP4: retain the existing precise fallback.
-- Candidate with no fast-pass boundary: exact local verification must recover it.
+- 並列処理のキャンセルで全プロセスを停止・回収する。
+- 参照フレームが疎なH.264でも、高速経路の境界が元時刻に一致する。
+- 対応MP4に候補がない場合、高速モードは短時間で返り、精密モードは全体を調べる。
+- 未対応／フラグメント化MP4では既存の精密フォールバックを維持する。
+- 高速経路で境界のない候補を、局所的な厳密検証で回収できる。
 
----
+### タスク1: 疎な候補窓を選ぶ
 
-### Task 1: Select sparse candidate windows
+**対象:**
+- 変更: `src-tauri/src/detection_candidates.rs`
+- 変更: `src-tauri/src/detection.rs`
 
-**Files:**
-- Modify: `src-tauri/src/detection_candidates.rs`
-- Modify: `src-tauri/src/detection.rs`
+**インターフェース:** `candidate_windows(path, info, keyframes)`が、元動画のキーフレーム近くにある、パケットサイズの小さいまとまりから走査窓を返す。
 
-**Interfaces:** `candidate_windows(path, info, keyframes)` returns zero or more windows from compact low-packet-size clusters near source keyframes.
+- [x] サンプルサイズ候補を時刻順にまとめ、キーフレームの0.15秒前以内にあり、マクロブロックあたり0.3バイト以下の局所最小値を採用する。0.3〜0.7の範囲はキーフレームの0.10〜0.15秒前にある最小値だけを採用する。
+- [x] 選択したイベント窓に前後2秒の文脈を付けて統合し、候補密集時の全走査フォールバックを維持する。
+- [x] 実ファイルで候補計画を確認し、1本目で境界候補がなく、2本目で期待される7か所が得られることを確認する。
 
-- [x] Group sorted sample-size candidates, retain local minima at or below 0.3 bytes per macroblock when within 0.15 seconds before a keyframe, and retain the 0.3–0.7 range only for minima 0.10–0.15 seconds before a keyframe.
-- [x] Merge selected event windows with 2 seconds of context and keep the existing dense-window fallback.
-- [x] Verify the real-file planner produces no boundary candidates for video 1 and the seven expected locations for video 2.
+### タスク2: 並列粗走査と局所的な厳密フォールバック
 
-### Task 2: Parallel coarse pass and local exact fallback
+**対象:** `src-tauri/src/detection.rs`。
 
-**Files:**
-- Modify: `src-tauri/src/detection.rs`
+**インターフェース:** `DetectionControl`で複数プロセスを追跡し、窓ごとのワーカーがチャネル経由で境界またはエラーを返す。
 
-**Interfaces:** `DetectionControl` tracks multiple child processes; window workers return detector boundaries or errors through a channel.
+- [x] キャンセル時に登録済みFFmpegプロセスをすべて停止し、各ワーカーが自分のプロセスを回収するよう変更する。
+- [x] 最大4ワーカーのプールを使い、粗走査では`-skip_frame noref`を指定する。
+- [x] 粗走査で境界が見つからなかった窓だけを全フレームで再走査し、精密モードは動画全体を一度走査する。
+- [x] 単調増加する進捗、境界のスナップと重複除去を維持する。
+- [x] 既存のRust結合テストでキャンセルと精度フォールバックを確認する。
 
-- [x] Refactor child tracking so cancellation kills all registered FFmpeg processes and each worker reaps its own child.
-- [x] Run candidate windows in a pool capped at four workers, with `-skip_frame noref` for the coarse pass.
-- [x] Re-run only windows with no coarse boundary using the existing full-frame detector; keep precise mode as one full-video scan.
-- [x] Preserve monotonic progress events and boundary snapping/deduplication.
-- [x] Verify cancel handling and full precision fallback through the existing Rust integration tests.
+### タスク3: 計測とパッケージ
 
-### Task 3: Measure and package
+**対象:** `src-tauri/examples/detection_bench.rs`を使い、`src-tauri/target/release/bundle/macos/Minimal Video Editor.app`をビルドする。
 
-**Files:**
-- Use: `src-tauri/examples/detection_bench.rs`
-- Build: `src-tauri/target/release/bundle/macos/Minimal Video Editor.app`
-
-- [x] Run Rust formatting, clippy, and the relevant existing Rust integration tests.
-- [x] Measure cold scans for both user-provided files; ignore cached repeat timings.
-- [x] Require exact boundary-list parity and at least 10x improvement over the previous fast-scan measurements (12.8024s and 28.6653s).
-- [x] Build the macOS app bundle after measurement passes.
+- [x] Rust整形、Clippy、関連する既存Rust結合テストを実行する。
+- [x] 2つの指定動画でキャッシュなしの初回走査を計測する。
+- [x] 前回の高速走査基準（12.8024秒、28.6653秒）に対して境界リストの完全一致と10倍以上の高速化を確認する。
+- [x] 計測が通った後にmacOSアプリをビルドする。

@@ -1,29 +1,29 @@
-# Playback fix and pnpm migration
+# 再生修正とpnpmへの移行
 
-## Reproduction
+## 再現
 
-The reported 834.8 MiB MP4 contains 960×540 H.264 High / yuv420p at 30000/1001 fps and AAC-LC stereo. The original native WKWebView probe reproduced audio playback with zero video dimensions/decoded frames and 29 audio seeks over eight seconds. This was a preview failure, not an unsupported codec or export problem.
+報告された834.8 MiBのMP4は、960×540、H.264 High / yuv420p、29.97 fps（30000/1001）、AAC-LCステレオだった。ネイティブWKWebViewテストでは、音声は再生するのに映像サイズと復号フレームは0で、8秒間に音声シークが29回発生した。これはプレビューの問題であり、コーデック非対応や書き出しの問題ではなかった。
 
-## Changes
+## 変更
 
-- Replace custom `asset://` media URLs with loopback HTTP streaming. The custom asset implementation caps each byte-range response at roughly 1 MiB; the same video decoded normally through an HTTP range server. The production server responds to exact ranges, including HEAD and suffix requests, with bounded 64 KiB buffers and at most eight active connections. It serves only the selected file through a fresh random route, validates the loopback Host, revokes old routes on selection changes, and stops on application exit. No full-file loading, transcoding, or preview copy is needed.
-- At zero audio offset, use the video's own audio stream and decoder clock. Load a separate audio element only when offset preview is active.
-- Treat advancing audio as the reference clock. User play/seek/offset changes may position audio, but ordinary clock drift changes video playback rate instead of continuously flushing the audio decoder. Align video once after audio startup or recovery. Drive synchronization through a low-frequency timer while offset playback is active, so obscured WebViews do not depend on rendering callbacks. Do not require a second `playing` event after a buffered seek; WKWebView can omit it.
-- Add real-media browser tests and a native playback probe. The native probe checks actual decoded frames/nonblack canvas pixels, audio clock advancement, bounded offset error and seek count. Browser tests also withhold rendering callbacks and repeated `playing` events to cover the native event sequence.
-- Switch package management to pnpm 12.16.1: `packageManager`, `mise.toml`, `pnpm-lock.yaml`, startup/build commands, CI and documentation. Remove the npm lockfile. Frozen offline pnpm install succeeds.
+- カスタム`asset://`メディアURLをループバックHTTP配信に置き換えた。カスタムアセット実装ではバイト範囲応答が約1 MiBに制限される一方、同じ動画はHTTP範囲サーバー経由で正常に復号した。本番サーバーはHEADとsuffix指定を含む正確な範囲に対応し、読み込みバッファは64 KiB、同時接続は最大8。新しいランダムルートで選択中のファイルだけを配信し、ループバックHostを検証する。素材選択変更時に古いルートを無効化し、アプリ終了時に停止する。全体読み込み、トランスコード、プレビューコピーは不要。
+- 音ズレ補正が0秒の場合は、動画自身の音声ストリームとデコーダー時計を使う。補正プレビュー時だけ別の音声要素を読み込む。
+- 進行する音声を基準時計にする。ユーザーによる再生・シーク・補正変更時に音声位置を動かすことはできるが、通常の時計ずれでは音声デコーダーを繰り返しリセットせず、映像の再生速度を調整する。音声の開始・復帰後に映像を一度合わせる。補正再生中は低頻度タイマーで同期し、WebViewが非表示でも描画コールバックに依存しない。バッファ済みシーク後にWKWebViewが2回目の`playing`イベントを出さない場合があるため、それを必須にしない。
+- 実メディアのブラウザーテストとネイティブ再生テストを追加した。ネイティブテストでは実際の復号フレーム／黒以外の描画画素、音声時計の進行、許容ずれ、シーク回数を調べる。ブラウザーテストでは描画コールバックを止める状況や、再度の`playing`イベントがない状況も確認する。
+- パッケージ管理をpnpm 12.16.1へ移行。`packageManager`、`mise.toml`、`pnpm-lock.yaml`、起動／ビルドコマンド、CI、ドキュメントを更新し、npmロックファイルを削除した。pnpmのオフライン固定インストールは成功。
 
-## Verification, 2026-11-14
+## 検証（2026-11-14）
 
-- Node model/timing tests: 13 passing.
-- Rust: 2 unit + 9 FFmpeg export integration + 3 real HTTP streaming tests passing.
-- Browser UI and real decoding: 4 passing, including input/shortcut behavior and offset reset.
-- TypeScript check, frontend build, Rust formatting and clippy with denied warnings pass.
-- Native WKWebView playback using the reported file: all three probes exit 0. No source file mutation.
+- Nodeのモデル／タイミングテスト13件が成功。
+- Rust: 単体2件、FFmpeg書き出し結合9件、HTTP実メディア配信3件が成功。
+- ブラウザーUIと実復号テスト4件が成功。入力／ショートカット操作、補正リセットを含む。
+- TypeScript検査、フロントエンドビルド、Rust整形、警告をエラーにしたClippyが成功。
+- 報告されたファイルを使うネイティブWKWebView再生テスト3種類はすべて終了コード0。元動画の変更なし。
 
-| Offset | Video dimensions | Audio seek events in 8 s | Measured offset error |
+| 補正 | 映像サイズ | 8秒間の音声シーク回数 | 測定した補正誤差 |
 | --- | --- | --- | --- |
-| 0 | 960×540 | 0 | native combined playback |
-| +0.250 s | 960×540 | 0 | 0.0021 s |
-| −0.250 s | 960×540 | 1 | 0.0107 s |
+| 0 | 960×540 | 0 | 映像と音声を一緒に再生 |
+| +0.250秒 | 960×540 | 0 | 0.0021秒 |
+| −0.250秒 | 960×540 | 1 | 0.0107秒 |
 
-Export still uses FFmpeg stream copy with unchanged codec payloads. Windows interactive playback remains unverified; the architecture and build settings remain compatible with Windows.
+書き出しでは引き続きFFmpegストリームコピーを使い、符号化済みパケットを維持する。Windowsでの対話再生は未検証だが、構成とビルド設定はWindowsにも対応する。

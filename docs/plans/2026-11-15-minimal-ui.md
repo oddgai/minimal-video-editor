@@ -1,27 +1,27 @@
-# Minimal English UI
+# 最小限の英語UI
 
-> **For agentic workers:** Use superpowers:executing-plans to implement inline. Detailed UI decisions were delegated by the user earlier.
+> **エージェントで作業する場合:** この計画に沿って実装する。UIの詳細はユーザーから委任済み。
 
-**Goal:** Apply the user's five screenshot annotations: English UI; only Choose file in the empty preview; no branded header/sidebar/footer/chapter editing panel or timeline captions.
+**目標:** ユーザーが示した5枚のスクリーンショットの指示を反映する。画面は英語、空のプレビューには「Choose file」だけを表示し、ブランドヘッダー・サイドバー・フッター・チャプター編集パネル・タイムライン説明をなくす。
 
-**Architecture:** Retain the existing playback, chapter model, native export and shortcuts. Use one full-width video preview, one compact chapter timeline and one bottom control row. Put audio offset in this row with file/open/export/info/shortcut controls. File details live in a dialog. Editing actions remain available through chapter blocks and shortcuts.
+**構成:** 既存の再生、チャプターモデル、ネイティブ書き出し、ショートカットは維持する。全幅プレビュー、簡潔なチャプタータイムライン、下部の操作列に整理する。音声補正、ファイルを開く／情報／書き出し／ショートカット操作を下部に配置し、ファイル情報はダイアログにする。編集操作はチャプターブロックとショートカットから行う。
 
-**Tech stack:** Existing TypeScript, CSS, Tauri; no dependencies or preview transformations.
+**技術:** 既存のTypeScript、CSS、Tauriを使い、依存やプレビュー変換は追加しない。
 
-## Constraints and review focus
+## 制約とレビュー時の重点
 
-- Initial screen: Choose file button and an unobtrusive keyboard icon; no marketing copy or disabled editing panels.
-- Loaded screen: no header/brand/status heading, inspector, chapter list/details/buttons, timeline caption/count legend, or footer. Keep full-width chapter blocks and keyframe markers.
-- Preserve play/pause and seek behavior, compact edited timeline, chapter shortcuts, undo/redo, offset seconds, export progress and modal guards, Cmd W/Q, drag-and-drop.
-- Accessible English labels/tooltips for icon controls; English custom native menu/dialog/error/progress text. User filenames are unchanged. System-supplied menu labels follow OS locale.
-- Verify full layouts at 1280×850 and minimum 900×680, keyboard focus after load/close, empty chapter state, disabled unsupported audio, and details/help modal keyboard handling.
+- 初期画面は「Choose file」ボタンと目立たないキーボードアイコンだけにし、宣伝文句や無効な編集パネルを置かない。
+- 読み込み後はヘッダー／ブランド／ステータス見出し、インスペクター、チャプター一覧・詳細・ボタン、タイムライン説明・件数、フッターを表示しない。全幅チャプターとキーフレーム表示を残す。
+- 再生／停止、シーク、詰めたタイムライン、チャプターショートカット、Undo/Redo、秒単位の補正、書き出し進捗・モーダル制限、Cmd W/Q、ドラッグ＆ドロップを維持する。
+- アイコン操作にアクセシブルな英語ラベル・ツールチップを付け、独自のネイティブメニュー／ダイアログ／エラー／進捗表示も英語にする。ユーザーのファイル名は変更しない。OSが提供するメニュー名はOSの言語に従う。
+- 1280×850と最小900×680で画面全体を確認する。読み込み・閉じる後のキーボードフォーカス、空のチャプター、未対応音声の無効状態、情報／ヘルプモーダルのキーボード操作を確認する。
 
-## Tasks
+## タスク
 
-- [x] Adapt the existing UI regressions to the timeline-only chapter UI and English controls; add coverage for on-demand file info/audio controls. Observed the Choose file assertion fail before implementation.
-- [x] Replace template/styles, remove DOM bindings for deleted elements, move audio and utility controls, and add file info dialog. Preserve player/model logic.
-- [x] Translate remaining frontend/native user-facing copy; keep cancellation recognition working with English errors. Update documentation and native playback probe selectors.
-- [x] Run Node, type, browser and Rust checks: 17 Node + 12 Playwright + 16 Rust tests pass; typecheck/fmt/clippy pass. Inspected empty/loaded/file info screenshots at 1280×850 and loaded screen at 900×680.
-- [x] Fresh scoped review `minimal_ui_review`: no Critical/Important findings. Reviewed removed bindings, close/reopen, empty chapters, shortcuts, modal/cancel behavior, translations and narrow screenshot.
-- [x] Verify native playback with the updated DOM: provided H.264/AAC source decodes at 960×540, nonblack pixels, advancing audio with −0.25 s correction, 0.0005 s final offset error, no media errors; probe exits 0.
-- [x] Build macOS release app: bundle succeeds, 4.57 MiB. Frontend assets shrink to 9.13 kB CSS / 48.92 kB JS; no dependencies added.
+- [x] タイムライン中心UIと英語操作に合わせて既存UI回帰テストを変更し、要求時に表示するファイル情報／音声操作を追加する。「Choose file」のアサーションが実装前に失敗することを確認。
+- [x] テンプレート／スタイルを置き換え、不要要素のDOM参照を削除し、音声・ユーティリティ操作を移動してファイル情報ダイアログを追加。プレーヤーとモデルは維持。
+- [x] 残りの画面文言／ネイティブ表示を英語にし、英語エラーでのキャンセル認識を維持。ドキュメントとネイティブ再生テストのセレクターを更新。
+- [x] Node、型、ブラウザー、Rustの検査を実行。Node 17件、Playwright 12件、Rust 16件が成功。型検査、fmt、Clippyも成功。1280×850の空／読み込み／情報画面、900×680の読み込み画面を確認。
+- [x] 範囲を絞った新規レビュー`minimal_ui_review`で重大な指摘なし。削除済み参照、閉じて再読込、空チャプター、ショートカット、モーダル／キャンセル、英訳、小さい画面を確認。
+- [x] 更新DOMでネイティブ再生を確認。提供されたH.264/AAC（960×540）を復号し、黒ではないフレーム、−0.25秒補正中の進む音声、最終ずれ0.0005秒、メディアエラーなし。テストプログラムは終了コード0。
+- [x] macOSリリースアプリの作成に成功、4.57 MiB。フロントエンドはCSS 9.13 kB、JavaScript 48.92 kBまで縮小し、依存を追加していない。

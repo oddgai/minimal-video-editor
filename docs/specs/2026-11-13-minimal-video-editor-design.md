@@ -1,28 +1,34 @@
 # Minimal Video Editor
 
-## Intent
-A small, keyboard-first desktop application for cutting local video without re-encoding and correcting a constant audio offset. macOS is the first supported platform; keep the implementation compatible with Windows. The user delegates detailed design and prioritizes responsiveness and low overhead.
+## 目的
 
-## Decisions
-- Tauri 2, Rust, and vanilla TypeScript/CSS. Use the system WebView instead of shipping Chromium. No frontend framework, remote services, telemetry, accounts, or full-file JavaScript reads.
-- FFmpeg/ffprobe are external executables, discovered next to the application, from explicit environment overrides, common macOS install paths, and PATH. Provide actionable setup errors. Bundling these executables and their licenses is a separate distribution concern.
-- One source file per editing session. Keep an ordered list of source-time ranges. Start with the whole source, support keeping or removing a marked range and undo/redo.
-- Probe basic metadata first. Scan packet timestamps and keyframe flags in a background task without decoding the video. Store only keyframe timestamps. Editing at random-access boundaries is enabled after analysis; ordinary playback remains available during analysis.
-- Markers snap to known keyframes (the source end is also an allowed end). Show the actual marked positions. No silent re-encoding. Some open-GOP codecs can still need a safer random-access point; state this limitation.
-- Stream-copy each retained range to temporary files in the destination container, concatenate when necessary with a consistent presentation timestamp origin, and apply a constant audio timestamp offset in a final remux. Positive offset means audio plays later. Export only the primary video and optional primary audio. Preserve video/audio codecs. Output defaults to the source container when supported.
-- Cancel and reap background keyframe scans on source replacement and window/application exit. Keep scans sequential per current session.
-- Never overwrite source or existing output files. Export to a private temporary directory beside the destination, then publish with a no-clobber operation. Cancel stops the active FFmpeg child and removes temporary outputs. Only one export at a time.
-- Preview uses native video/audio elements and loopback HTTP byte-range streaming with 64 KiB transfer buffers, a random per-selection URL, and at most eight connections. This avoids WKWebView large-MP4 failures observed with the capped custom asset protocol. No full-file reads or proxy conversion. At zero offset, play audio directly through the video element. Separate audio is loaded only for offset preview; use its advancing output clock as the reference and adjust video, rather than repeatedly seeking or changing the tempo of audio. Unsupported WebView codecs receive a clear message rather than an automatic expensive transcode.
-- A compact Japanese interface: preview, timeline with keyframes and retained ranges, markers, retained-range list, audio offset in seconds, export progress, and shortcut reference.
+ローカル動画を再エンコードせずにカットし、一定の音ズレを補正する、キーボード中心の小さなデスクトップアプリ。macOSを最初の対象とし、Windowsとの互換性を保つ。ユーザーは細部の設計を委任し、応答性と低負荷を優先している。
 
-## Shortcuts
-Command/Ctrl+O open; Space play/pause; Left/Right step one nominal frame; Shift+Left/Right previous/next keyframe; Alt+Left/Right seek 5 seconds; Home/End source bounds; I/O set markers; Backspace/Delete remove marked range; Enter keep marked range; Command/Ctrl+Z undo; Shift+Command/Ctrl+Z redo; Command/Ctrl+E export; [/] decrease/increase audio delay 0.01 seconds; ? shortcut reference. Do not intercept editing keys inside inputs.
+## 決定
 
-## Alternatives
-Electron is easier to integrate but adds a Chromium/Node runtime. Native Swift/AppKit is attractive for macOS but creates a second frontend for Windows. Tauri fits the requested platform direction and overhead preference. These are implementation choices delegated by the user, not independently approved preferences.
+- Tauri 2、Rust、素のTypeScript/CSSを使う。Chromiumを同梱せず、OSのWebViewを使う。フロントエンドフレームワーク、リモートサービス、テレメトリー、アカウント、JavaScriptでのファイル全体読み込みは使わない。
+- FFmpeg/ffprobeは配布時に同梱し、OS・CPUに合う実行ファイルをアプリ内リソースから探す。開発時は環境変数による明示設定とシステム上の実行ファイルも利用できる。同梱バイナリはGPL/nonfree機能を含めず、ビルド情報・ライセンス通知・対応ソースの入手方法を管理する。実装状況は[ADR 0006](../adr/0006-bundle-lgpl-ffmpeg.md)を参照。
+- 編集セッションでは素材を一つ扱う。元動画の時刻範囲を順序付きで保持する。初期状態は全編で、指定範囲の削除／保持とUndo/Redoを可能にする。
+- まず基本メタデータを読み込む。バックグラウンドで動画を復号せずにパケット時刻とキーフレーム情報を走査し、キーフレーム時刻だけを保存する。ランダムアクセス境界での編集は解析後に有効化し、解析中も通常再生は可能にする。
+- マーカーを既知のキーフレーム（終端も許可）に合わせ、実際の位置を表示する。暗黙の再エンコードはしない。open GOPなどでは安全なランダムアクセスポイントが別途必要な場合があるため、制限を明示する。
+- 残す範囲ごとに出力コンテナ内の一時ファイルへストリームコピーする。必要に応じて一貫した表示時刻の起点で連結し、最終的な再多重化で一定の音声時刻補正を適用する。正の補正は音声を遅らせる。主映像と、存在すれば主音声だけを書き出し、映像／音声コーデックを保持する。対応する場合は元動画と同じコンテナを既定にする。
+- 素材切替時やウィンドウ／アプリ終了時にバックグラウンドのキーフレーム走査をキャンセルしてプロセスを回収する。一つのセッション内では走査を直列にする。
+- 元動画や既存出力を上書きしない。保存先の隣に専用一時ディレクトリを作り、競合しない方法で完成品を公開する。キャンセルではFFmpegを停止し、一時出力を削除する。書き出しは一度に一つだけ許可する。
+- プレビューはネイティブの動画／音声要素と、64 KiBのバッファ、一時的な素材別URL、最大8接続のループバックHTTPバイト範囲配信を使う。応答サイズに上限のあるカスタムアセットプロトコルで大きなMP4を再生できなかったためである。全ファイル読み込みやプロキシ変換はしない。補正0秒では動画要素の音声をそのまま使う。音声補正中だけ分離音声を読み込み、繰り返しシークしたり音声速度を変えたりせず、進行する音声時計を基準に映像を調整する。WebViewが対応しない形式は重い自動変換をせず、説明を表示する。
+- 当初は日本語の簡潔な画面を想定。プレビュー、キーフレームと残存範囲を示すタイムライン、マーカー、残存範囲一覧、秒単位の音ズレ補正、書き出し進捗、ショートカット一覧を含む。
 
-## Limits of the first version
-No automatic lip synchronization, drift correction, filters, transitions, multitrack editing, or automatic transcoding. Native preview codec support varies by OS. Nominal frame stepping uses the reported frame rate and is approximate for variable-frame-rate sources. Stream-copy boundaries, particularly audio packet durations and open GOPs, constrain precision. Windows builds are checked in CI; interactive testing requires Windows.
+## ショートカット
 
-## Acceptance
-Open a local H.264/AAC MP4, navigate keyframes, mark and remove/keep ranges with shortcuts, undo/redo, preview an audio offset, and export with unchanged encoded video/audio packets. Exercise silent media, paths with Unicode/spaces/apostrophes, invalid ranges, source overwrite attempts, cancellation, repeated exports, and positive/negative audio offsets. Typecheck/build frontend, test editing behavior, compile/test Rust, run real FFmpeg integration tests, and build a macOS app.
+Command/Ctrl+Oで開く、Spaceで再生／停止、左右キーで公称1フレーム移動、Shift+左右で前後のキーフレーム、Alt+左右で5秒移動、Home/Endで素材端、I/Oでマーカー設定、Backspace/Deleteで指定範囲を削除、Enterで指定範囲を保持、Command/Ctrl+ZでUndo、Shift+Command/Ctrl+ZでRedo、Command/Ctrl+Eで書き出し、[/]で音声遅延を0.01秒ずつ調整、?でショートカット一覧。入力欄の文字入力中は編集キーを奪わない。
+
+## 代替案
+
+Electronは統合しやすいがChromium/Nodeランタイムを追加する。Swift/AppKitネイティブアプリはmacOSには適するがWindows向けに別画面が必要になる。Tauriはユーザーのプラットフォーム方針と軽量化の希望に合う。この選択はユーザーが細部設計を委任したことに基づく実装判断であり、個別に承認された好みとしては扱わない。
+
+## 初版の制限
+
+自動リップシンク、時間経過で広がるズレの補正、フィルター、トランジション、マルチトラック編集、自動トランスコードには対応しない。ネイティブプレビューのコーデック対応はOSにより異なる。公称フレームレートによるフレーム移動は可変フレームレート素材では近似となる。ストリームコピー境界、特に音声パケット長とopen GOPが精度を制限する。WindowsビルドはCIで確認するが、対話操作はWindowsで検証が必要。
+
+## 受け入れ条件
+
+H.264/AAC MP4を読み込み、キーフレーム移動、ショートカットで範囲を保持／削除、Undo/Redo、音ズレ補正プレビュー、符号化済み映像／音声パケットを変えない書き出しができること。無音素材、Unicode／空白／アポストロフィを含むパス、不正な範囲、元ファイル上書き、キャンセル、繰り返し書き出し、正負の音ズレ補正を検証する。フロントエンドの型検査／ビルド、編集テスト、Rustコンパイル／テスト、実FFmpeg結合テスト、macOSアプリビルドを実施する。

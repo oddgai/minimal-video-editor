@@ -1,66 +1,79 @@
-# Minimal Video Editor Implementation Plan
+# Minimal Video Editor 実装計画
 
-> **For agentic workers:** Use superpowers:executing-plans to implement this plan task-by-task in this session. The user delegated detailed design and requested implementation; continue without further design approval.
+> **エージェントで作業する場合:** この計画に沿って各タスクを実装する。詳細設計と実装をユーザーから委任されているため、追加の設計承認を求めずに進める。
 
-**Goal:** Build a lightweight macOS video editor with lossless cuts, keyboard operation, and manual audio sync; preserve a Windows-compatible architecture.
+**目標:** macOS向けの軽量な動画編集アプリを作り、無劣化カット、キーボード操作、手動の音ズレ補正を実現する。Windowsにも対応できる構成を維持する。
 
-**Architecture:** A Tauri application serves a small vanilla TypeScript interface. Rust probes local files, streams keyframe metadata, and manages cancellable FFmpeg exports without shell interpolation. Native WebView media playback avoids decoding video into JavaScript.
+**構成:** Tauriアプリから小さな素のTypeScript UIを提供する。Rustでローカルファイルの解析、キーフレーム情報のストリーミング、キャンセル可能なFFmpeg書き出しを安全に行う。動画はOSのWebViewで再生し、JavaScriptで復号しない。
 
-**Tech Stack:** Tauri 2, Rust, TypeScript, Vite, Node test runner, FFmpeg/ffprobe.
+**技術:** Tauri 2、Rust、TypeScript、Vite、Nodeテストランナー、FFmpeg/ffprobe。
 
-**Spec:** `docs/specs/2026-11-13-minimal-video-editor-design.md`
+**仕様:** `docs/specs/2026-11-13-minimal-video-editor-design.md`
 
-## Global Constraints
-- macOS first; Windows-compatible paths, processes, and shortcuts.
-- No re-encoding, full-file JavaScript reads, permanent proxies, or background waveform/thumbnail generation.
-- Source and existing destination files must never be overwritten.
-- Audio offset is in seconds; positive means audio later.
-- No remote assets or services at runtime.
+## 全体制約
 
-## Review Focus
-- Nonzero source timestamps and variable frame rates: normalized keyframes and bounded markers.
-- Silent video and unsupported native preview codecs: usable editor and actionable preview error.
-- File names with Unicode, spaces, and apostrophes: argument-based process spawning and escaped concat entries.
-- Cancellation and concurrent export requests: one active export and no partial destination.
-- Positive/negative audio offsets: preserved stream data and independently measured timing differences.
+- macOSを優先しつつ、Windowsでも動くパス・プロセス・ショートカット設計にする。
+- 再エンコード、JavaScriptでの全ファイル読み込み、常設プロキシ、バックグラウンドの波形・サムネイル生成を行わない。
+- 元ファイルおよび既存の出力先を上書きしない。
+- 音ズレ補正の単位は秒。正の値は音声を遅らせる。
+- 実行時に外部アセットやサービスへ接続しない。
 
-### Task 1: Editing model and app configuration
-**Files:** package.json, tsconfig.json, vite.config.ts, index.html, src/editor.ts, tests/editor.test.ts, src-tauri/Cargo.toml, src-tauri/tauri.conf.json, src-tauri/capabilities/default.json.
-**Interfaces:** `Range { start: number; end: number }`, `Editor` manages retained ranges, marker snapping, history, keyframe seeking, and audio delay.
-- [x] Write tests for removing a middle range, keeping across deleted gaps, undo/redo including delay, snapping, invalid/empty edits, and next/previous keyframe boundaries.
-- [x] Run `pnpm test` and observe missing implementation failure.
-- [x] Implement the pure editing model and minimal Tauri/Vite configuration.
-- [x] Run `pnpm test` and `pnpm check`; expect all tests/typechecks to pass.
+## レビュー時の重点
 
-### Task 2: Native media engine
-**Files:** src-tauri/src/media.rs, src-tauri/src/export.rs, src-tauri/src/lib.rs, src-tauri/src/main.rs, src-tauri/build.rs, src-tauri/tests/media_integration.rs.
-**Interfaces:** `probe_media(path) -> MediaInfo`, `scan_keyframes(path) -> Vec<f64>`, `start_export(request)` with progress events, `cancel_export()`; dialog commands select input/output; local asset URLs are scoped to selected media.
-- [x] Add Rust validation/probe/export tests and run `cargo test` to observe failures before implementing the engine.
-- [x] Implement executable discovery, safe async commands, metadata parsing, streamed packet scanning, stream-copy segment/concat/remux, cancellation, progress, and atomic no-clobber publish.
-- [x] Use real FFmpeg fixtures to check retained duration, unchanged packet hashes, offsets in both directions, silent media, unusual paths, overwrite protection, and cancellation.
-- [x] Run `cargo test`; expect unit and integration tests to pass.
+- 元動画の時刻が0でない場合と可変フレームレート: キーフレームを正規化し、マーカー範囲を制限する。
+- 無音動画とWebViewが対応しないコーデック: 編集を利用可能にし、プレビューエラーを分かりやすく表示する。
+- Unicode、空白、アポストロフィを含むファイル名: 引数配列でプロセスを起動し、concat用の項目をエスケープする。
+- キャンセルと同時書き出し要求: 書き出しは一つに限定し、未完成の出力を残さない。
+- 正負両方の音ズレ補正: ストリームデータを保ち、タイミング差を個別に測定する。
 
-### Task 3: Desktop editor interface
-**Files:** src/main.ts, src/styles.css, src/bridge.ts, src/player.ts, src/icons.ts, tests/player.test.ts.
-**Interfaces:** Typed native bridge consumes MediaInfo and Range, sends ExportRequest, listens for job-scoped progress. Player synchronizes audio to `video.currentTime - offset` only while playing.
-- [x] Test audio timing decisions for positive/negative offsets, bounds, and paused playback before implementing the synchronizer.
-- [x] Build Japanese editor UI: native open/drop, source metadata, playback, editable markers, keyframe timeline, range operations/history, offset controls, export/cancel, accessible shortcut dialog, visible loading/error/empty states.
-- [x] Verify `pnpm test`, `pnpm check`, `pnpm build`, and desktop compilation.
+### タスク1: 編集モデルとアプリ設定
 
-### Task 4: Distribution, verification, and review
-**Files:** README.md, .github/workflows/ci.yml, scripts/verify-media.mjs as needed.
-- [x] Document setup, launch/build, FFmpeg discovery, shortcuts, precision and preview limitations.
-- [x] Add macOS/Windows CI typechecks, editing tests, Rust checks/tests, and application build.
-- [x] Run the full tests, formatter, clippy, release build, and smoke checks; record actual evidence and any environment limitations.
-- [x] Request a fresh code review, address significant findings, then leave the implementation and runnable artifacts available in the user's workspace.
+**対象:** `package.json`、`tsconfig.json`、`vite.config.ts`、`index.html`、`src/editor.ts`、`tests/editor.test.ts`、`src-tauri/Cargo.toml`、`src-tauri/tauri.conf.json`、`src-tauri/capabilities/default.json`。
 
-## Verification record (2026-11-13)
+**インターフェース:** `Range { start: number; end: number }`。`Editor`が残す範囲、マーカーのスナップ、履歴、キーフレーム移動、音声遅延を管理する。
 
-- `pnpm test`: 11 passing tests covering editing and audio timing.
-- `pnpm check` / `pnpm build`: passing; production frontend approximately 47 kB JavaScript + 16 kB CSS, before compression.
-- `cargo test --manifest-path src-tauri/Cargo.toml --offline`: 2 unit + 9 real FFmpeg integration tests passing.
-- `cargo fmt --manifest-path src-tauri/Cargo.toml -- --check` and `cargo clippy --manifest-path src-tauri/Cargo.toml --offline --all-targets -- -D warnings`: passing.
-- `ppnpm test:ui`: 2 passing Chromium UI tests using the real UI and mocked native IPC. These cover input protection, keyboard button activation, editing/history, audio offset, export payload, dialogs, and browser-only error behavior; not native dialogs or WebView media decoding.
-- `pnpm desktop:build`: macOS application bundle built successfully, 4.52 MiB excluding external FFmpeg. Native process startup smoke-tested outside the filesystem sandbox.
-- Fresh reviewer identified inconsistent per-segment timestamp origins, blocked Enter activation, and obsolete scans continuing in the background. Each received a regression test; all fixes are included. B-frame join spacing is now 2.000 seconds for the tested [0,2]+[4,6] fixture rather than 2.074707 seconds.
-- macOS and Windows CI configurations added. Windows CI and interactive Windows behavior have not been run in this session. Signing/notarization and bundling FFmpeg are outside the first local development build.
+- [x] 中間範囲の削除、削除区間をまたぐ残し方、遅延を含むUndo/Redo、スナップ、不正・空編集、次／前キーフレーム境界のテストを書く。
+- [x] `pnpm test`を実行し、実装がないため失敗することを確認する。
+- [x] 純粋な編集モデルと最小限のTauri/Vite設定を実装する。
+- [x] `pnpm test`と`pnpm check`を実行し、テストと型検査が通ることを確認する。
+
+### タスク2: ネイティブメディアエンジン
+
+**対象:** `src-tauri/src/media.rs`、`src-tauri/src/export.rs`、`src-tauri/src/lib.rs`、`src-tauri/src/main.rs`、`src-tauri/build.rs`、`src-tauri/tests/media_integration.rs`。
+
+**インターフェース:** `probe_media(path) -> MediaInfo`、`scan_keyframes(path) -> Vec<f64>`、進捗イベント付きの`start_export(request)`、`cancel_export()`。ダイアログで入出力を選び、ローカルアセットURLは選択中の動画に限定する。
+
+- [x] Rustの検証・解析・書き出しテストを追加し、実装前に`cargo test`が失敗することを確認する。
+- [x] 実行ファイルの検索、安全な非同期コマンド、メタデータ解析、パケット走査、ストリームコピーによる分割・連結・再多重化、キャンセル、進捗、上書き防止の公開処理を実装する。
+- [x] 実FFmpeg素材で保持時間、パケットハッシュ不変性、正負の補正、無音素材、特殊なパス、上書き防止、キャンセルを確認する。
+- [x] `cargo test`を実行し、単体・結合テストが通ることを確認する。
+
+### タスク3: デスクトップ編集画面
+
+**対象:** `src/main.ts`、`src/styles.css`、`src/bridge.ts`、`src/player.ts`、`src/icons.ts`、`tests/player.test.ts`。
+
+**インターフェース:** 型付きネイティブブリッジで`MediaInfo`と`Range`を受け取り、`ExportRequest`を送信し、ジョブ単位の進捗を監視する。再生中のみ、`video.currentTime - offset`に音声を同期する。
+
+- [x] 同期処理を実装する前に、正負の音ズレ、境界、停止中の再生位置のテストを行う。
+- [x] ネイティブの開く／ドロップ、メタデータ、再生、編集可能なマーカー、キーフレームタイムライン、範囲操作と履歴、音ズレ補正、書き出し／キャンセル、アクセシブルなショートカットダイアログ、読み込み・エラー・空状態を備えた日本語UIを作る。
+- [x] `pnpm test`、`pnpm check`、`pnpm build`、デスクトップのコンパイルを確認する。
+
+### タスク4: 配布・検証・レビュー
+
+**対象:** 必要に応じて`README.md`、`.github/workflows/ci.yml`、`scripts/verify-media.mjs`。
+
+- [x] セットアップ、起動・ビルド、FFmpeg検索、ショートカット、精度、プレビュー制限を説明する。
+- [x] macOS/Windowsの型検査、編集テスト、Rust確認、アプリビルドをCIに追加する。
+- [x] 全テスト、フォーマッター、Clippy、リリースビルド、スモークテストを実行し、実測値と環境上の制約を記録する。
+- [x] 新たにコードレビューを依頼し、重要な指摘を修正して、実装と実行可能な成果物をワークスペースに残す。
+
+## 検証記録（2026-11-13）
+
+- `pnpm test`: 編集と音声タイミングを扱う11テストが成功。
+- `pnpm check` / `pnpm build`: 成功。圧縮前の本番フロントエンドはJavaScript約47 kB、CSS約16 kB。
+- `cargo test --manifest-path src-tauri/Cargo.toml --offline`: 単体2件と実FFmpeg結合9件が成功。
+- `cargo fmt --manifest-path src-tauri/Cargo.toml -- --check`、`cargo clippy --manifest-path src-tauri/Cargo.toml --offline --all-targets -- -D warnings`: 成功。
+- `pnpm test:ui`: 実UIとモックしたネイティブIPCを使うChromiumテスト2件が成功。入力保護、キーボードボタン操作、編集・履歴、音ズレ補正、書き出し内容、ダイアログ、ブラウザーのみのエラー動作を確認。ネイティブダイアログやWebView復号は対象外。
+- `pnpm desktop:build`: macOSアプリをビルド。外部FFmpegを除き4.52 MiB。ファイルシステムサンドボックス外でネイティブプロセス起動をスモークテスト済み。
+- 新たなレビューで、セグメントごとのタイムスタンプ原点の不一致、Enterキーによる起動、バックグラウンドで残る古い走査が見つかった。それぞれ回帰テストを追加して修正した。Bフレームを含む`[0,2]+[4,6]`の結合間隔は2.074707秒から2.000秒になった。
+- macOS/Windows CI設定を追加。今回の作業ではWindows CIと対話動作は未実行。署名・公証とFFmpeg同梱は最初のローカル開発ビルドの対象外。

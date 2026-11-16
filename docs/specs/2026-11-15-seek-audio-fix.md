@@ -1,24 +1,24 @@
-# Audio recovery after seeking with an offset
+# 音ズレ補正中のシーク後に音声を復帰する
 
-## Report and reproduction
+## 報告と再現
 
-The user reports intermittent missing audio when moving the seekbar and starting playback with audio correction enabled.
+音ズレ補正を有効にしてシークバーを動かした後、再生すると音が断続的に出なくなるという報告があった。
 
-A real-decoder browser regression reproduces the event-ordering fault: deliver `play`/`seeked` while `readyState` is `HAVE_CURRENT_DATA`, then allow the decoder to become ready. The old `sync(true)` returns before seeking audio, and later timer ticks call `sync(false)`, losing the requested alignment. Warm audio alignment can subsequently move video back to the stale audio position. In the failing run, a seek to 8 seconds resumed around video 3.7589 / audio 4.8206 with a −1 second offset.
+実デコーダーを使うブラウザー回帰テストで、イベント順による障害を再現した。`readyState`が`HAVE_CURRENT_DATA`の間に`play`／`seeked`を送り、その後デコーダーが準備完了になると、古い`sync(true)`は音声シーク前に戻ってしまう。後続のタイマーは`sync(false)`を呼び、要求された同期位置が失われる。その後、準備済みの音声に合わせる処理が映像を古い音声位置へ戻すことがある。失敗時は、8秒へのシーク後に映像が約3.7589秒、音声が約4.8206秒から再開し、補正は−1秒だった。
 
-The pre-fix native stress run did not reproduce complete silence naturally; all six seeks advanced audio, with transient startup drift around 0.21 seconds. Keep this distinct from the deterministic buffering regression.
+修正前のネイティブ負荷テストでは完全な無音は自然には再現せず、6回すべてのシークで音声は進んだが、起動時に約0.21秒の一時的なずれが出た。この測定は決定的に再現するバッファ問題とは分けて扱う。
 
-## Fix
+## 修正
 
-- Retain the explicit audio-seek request across paused, seeking, and buffering states. Clear it when audio timing can actually be corrected, rather than when the request first arrives.
-- Mark a pending correction immediately on user seeks, invalidate the previous warm-audio reference, and prevent warm video alignment while a newer seek is pending or video is still seeking.
-- Preserve the existing one-time audio seek and low-frequency video rate correction during ordinary playback. Do not repeatedly seek a warmed audio decoder.
-- Clear the pending state when loading/unloading media. Keep source files and export processing unchanged.
+- 停止中・シーク中・バッファ中も、明示された音声シーク要求を保持する。要求を受け取った時点では消さず、音声タイミングを実際に補正できたときに消す。
+- ユーザーシーク時に補正待ち状態をすぐ設定し、以前の音声基準を無効にする。新しいシークが保留中、または映像がまだシーク中の場合は、古い音声に映像を合わせない。
+- 音声の起動時だけ一度シークし、通常再生中は低頻度の映像速度調整で補正する既存方式を維持する。準備済みの音声デコーダーは繰り返しシークしない。
+- メディアの読み込み／取り外し時に保留状態を消す。元ファイルと書き出し処理は変更しない。
 
-## Verification
+## 検証
 
-- Browser regression checks both offset signs and confirms the requested video position, advancing audio, and bounded drift after buffering.
-- Existing zero-offset native sound, smooth offset playback, chapter navigation, export dialog, and shortcut tests pass: 17 Node tests and 11 Playwright tests.
-- Native probe adds six alternating paused/running seekbar sequences against the provided 960×540 H.264/AAC MP4. It checks advancing audio, selected position, startup drift within 0.3 seconds at 1.3 seconds after each seek, and final steady drift within 0.15 seconds after eight seconds. Both −12 and +12 second runs exit 0: every seek resumes audio, with final absolute drift 0.0497 and 0.0098 seconds respectively. No media errors.
-- TypeScript check, frontend build, Rust formatting and clippy with denied warnings pass.
-- Fresh read-only review `seek_audio_review`: no confirmed Critical or Important findings.
+- ブラウザー回帰テストで正負両方の補正を確認し、要求位置へ移動すること、音声が進むこと、バッファ後のずれが許容内に収まることを確認する。
+- 補正なしのネイティブ音声、滑らかな補正再生、チャプター移動、書き出しダイアログ、ショートカットの既存テストが成功。Node 17件、Playwright 11件。
+- 提供された960×540 H.264/AAC素材に対し、ネイティブテストでシークバーを停止／再生交互に6回操作する。音声が進むこと、選択位置、シーク1.3秒後の起動ずれが0.3秒以内、8秒後の安定ずれが0.15秒以内であることを確認。−12秒、+12秒の両方が終了コード0。全シーク後に音声が再開し、最終絶対ずれはそれぞれ0.0497秒、0.0098秒。メディアエラーなし。
+- TypeScript検査、フロントエンドビルド、Rust整形、警告をエラーにしたClippyが成功。
+- 新たな読み取り専用レビュー`seek_audio_review`で、重大な問題は確認されなかった。

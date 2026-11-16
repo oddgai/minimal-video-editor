@@ -1,13 +1,13 @@
-# Chapter editing
+# チャプター編集
 
-The user replaces marker-based cutting with chapters and specifies new shortcuts. Detailed design remains delegated; keep pnpm, Tauri, the corrected player, and FFmpeg stream copy.
+ユーザーの要望により、開始・終了マーカーでのカットを、チャプターの分割／選択／削除と指定ショートカットに置き換える。詳細設計は委任済み。pnpm、Tauri、修正済みプレーヤー、FFmpegストリームコピーを維持する。
 
-- Start with one selected chapter spanning the source. Split only at an interior retained keyframe; select the new right-hand chapter. Source ends, existing boundaries, and deleted gaps cannot split.
-- Delete the selected chapter from the list and timeline, close its gap, and select the next survivor or preceding survivor when deleting the last. Splits, deletion and audio offset support undo/redo including selection. Chapter selection alone does not create history.
-- Keep chapter boundaries in source seconds for lossless export. Derive compact timeline spans. Display edited time, map scrubbing back to source time, skip deleted intervals in preview, and stop at the last retained end. Clicking/selecting a chapter seeks to its start. Navigation preserves playing/paused state (updated at the user's request); seeking to the edited end stops playback. Empty edits remain undoable and cannot play/split/export.
-- Only retained keyframes appear and participate in navigation. Left/right clamp at retained keyframe bounds. Split requires being on an actual keyframe, without silently moving the cut.
-- Replace marker/frame-step controls with split, previous/next chapter, delete, and selected chapter details. Highlight selection in timeline and sidebar.
-- Command/Ctrl+S export, Left/Right keyframes, S split, Command/Ctrl+Left/Right chapters, D delete. Remove old export, frame-step, 5-second, source-bound and marker shortcuts. Keep Open, Space, undo/redo, audio offset keys, and help. Preserve input editing and focused-button activation; export commits an active input.
-- Chapters mean editing segments, not embedded container chapter metadata. Export surviving source ranges in order.
+- 最初は素材全体を一つの選択済みチャプターにする。残っている範囲内のキーフレームでのみ分割でき、分割後は新しい右側のチャプターを選ぶ。素材端、既存境界、削除済み区間では分割できない。
+- 選択中のチャプターを一覧とタイムラインから削除し、隙間を詰める。次のチャプターを選択し、最後を削除した場合は一つ前を選択する。分割・削除・音声補正は、選択状態も含めUndo/Redoできる。チャプター選択だけでは履歴を作らない。
+- 無劣化書き出しのため境界を元動画の秒数で保持し、詰めたタイムライン範囲は導出する。編集後の時刻を表示し、シークを元時刻に対応付け、削除区間を飛ばし、最後の残存範囲で停止する。チャプタークリック／選択でその先頭へ移動する。移動時に再生状態を維持する（ユーザー要望を反映）。編集末尾へのシークでは停止する。空の編集はUndo可能だが、再生・分割・書き出しはできない。
+- 残存キーフレームだけを表示し、移動先にする。左右キー移動は残存キーフレーム端で止める。分割時に自動で位置を動かさず、実キーフレーム上にいる必要がある。
+- マーカー／フレーム移動コントロールを分割、前後チャプター、削除、選択中チャプターの情報に置き換える。タイムラインとサイドバーで選択状態を示す。
+- `Command/Ctrl+S`で書き出し、左右キーでキーフレーム移動、`S`で分割、`Command/Ctrl+左右`でチャプター選択、`D`で削除。古い書き出し、フレーム移動、5秒移動、素材端移動、マーカーのショートカットは廃止する。開く、Space、Undo/Redo、音ズレ補正、ヘルプは維持する。入力操作とフォーカス中ボタンを尊重し、書き出し前に編集中の値を確定する。
+- チャプターは編集区間を指し、コンテナに埋め込まれたチャプターメタデータではない。残る元動画範囲を指定順に書き出す。
 
-Approach: store source ranges and derive the compact timeline. Rewriting ranges into edited times would lose FFmpeg source coordinates; retaining deleted gaps would conflict with the requested timeline behavior.
+**方針:** 元動画範囲を保存し、詰めたタイムラインを導出する。範囲を編集時刻へ書き換えるとFFmpeg用の元時刻を失い、削除済みの隙間を残すと要求されたタイムライン挙動と矛盾する。

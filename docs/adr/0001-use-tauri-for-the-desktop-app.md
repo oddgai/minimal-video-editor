@@ -1,35 +1,35 @@
 ---
 id: "0001"
-status: Accepted
+status: 採用
 date: "2026-11-13"
 ---
 
-# ADR 0001: Use Tauri 2 for the desktop app
+# ADR 0001: デスクトップアプリにTauri 2を使う
 
-## Context
+## 背景
 
-The editor needs to run on macOS and preferably Windows, handle large local video files with low overhead, and invoke FFmpeg without reading entire media files into the UI process. A macOS-only native application would not meet the cross-platform goal; shipping a browser runtime would increase the application footprint.
+このエディターはmacOSで動作し、できればWindowsにも対応し、負荷を抑えて大きなローカル動画を扱う必要があります。また、動画全体をUIプロセスに読み込まずにFFmpegを実行する必要があります。macOS専用のネイティブアプリではクロスプラットフォームの目標を満たせず、ブラウザーランタイムの同梱はアプリのサイズを増やします。
 
-## Decision
+## 決定
 
-Build the desktop shell with Tauri 2, use Rust for native file, media, and process operations, and use TypeScript with the operating system WebView for the interface. Keep media processing local and invoke the installed FFmpeg tools.
+デスクトップの枠組みにTauri 2を使い、ファイル・メディア・プロセス操作にはRustを、画面にはOSのWebViewとTypeScriptを使います。メディア処理はローカルで行い、インストール済みのFFmpegを実行します。
 
-This decision sets the application boundary and technology stack. It does not decide FFmpeg packaging, signing, or notarization; those belong to distribution planning.
+この決定はアプリの構成と技術スタックを定めます。FFmpegのパッケージ方法、署名、公証は決めません。これらは配布計画で扱います。
 
-## Consequences
+## 影響
 
-- The application can share its UI and Rust media operations across macOS and Windows while using the system WebView.
-- The app avoids bundling Chromium and Node.js.
-- Native platform behavior and WebView codec support can differ, so playback and release behavior require platform-specific verification.
-- Users need compatible FFmpeg and ffprobe executables available to the app.
+- OSのWebViewを使いながら、macOSとWindowsで画面とRustのメディア処理を共有できます。
+- ChromiumとNode.jsの同梱を避けられます。
+- OSの動作やWebViewのコーデック対応は異なるため、再生やリリースはプラットフォームごとに検証が必要です。
+- アプリから利用できるFFmpegとffprobeが必要です。
 
-## Alternatives considered
+## 検討した代替案
 
-- **Electron:** Offers a bundled, consistent Chromium runtime and Node.js integration, but increases the runtime footprint.
-- **Native Swift/AppKit:** Fits macOS well but would require a separate Windows implementation to meet the platform goal.
+- **Electron:** Chromiumランタイムを同梱でき、Node.jsとの連携も容易ですが、実行環境のサイズが大きくなります。
+- **Swift/AppKitネイティブアプリ:** macOSには適していますが、Windows対応には別実装が必要です。
 
-## References
+## 参照資料
 
-- `docs/specs/2026-11-13-minimal-video-editor-design.md` — platform goals and selected stack (checked 2026-11-16).
-- `src-tauri/tauri.conf.json`, `src-tauri/src/` and `src/` — current desktop shell, Rust commands, and TypeScript UI (checked 2026-11-16).
-- [Tauri 2 documentation](https://v2.tauri.app/) — desktop architecture and supported platforms (checked 2026-11-16).
+- `docs/specs/2026-11-13-minimal-video-editor-design.md` — プラットフォーム目標と技術スタック（2026-11-16確認）。
+- `src-tauri/tauri.conf.json`、`src-tauri/src/`、`src/` — 現在のデスクトップ構成、Rustコマンド、TypeScriptの画面（2026-11-16確認）。
+- [Tauri 2公式ドキュメント](https://v2.tauri.app/) — デスクトップ構成と対応プラットフォーム（2026-11-16確認）。

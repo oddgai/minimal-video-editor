@@ -1,35 +1,35 @@
 ---
 id: "0004"
-status: Accepted
+status: 採用
 date: "2026-11-16"
 ---
 
-# ADR 0004: Preserve full-scan results when accelerating chapter detection
+# ADR 0004: チャプター検出の高速化でも全走査の結果を保つ
 
-## Context
+## 背景
 
-Automatic detection decodes low-resolution grayscale samples to find black and white intervals. Scanning every frame sample in a long video can take minutes, while skipping too much media can miss chapter boundaries or report false ones. Users expect the faster mode to retain the results of the precise full scan.
+自動検出では、低解像度のグレースケール画像を復号して黒または白の区間を探します。長い動画の全サンプルを走査すると数分かかることがあります。一方、走査範囲を絞りすぎるとチャプター境界を見逃したり、誤った境界を返したりします。高速モードにも精密な全走査と同じ検出結果が求められます。
 
-## Decision
+## 決定
 
-Run detection only when the user requests it. Accelerate ordinary H.264 MP4 scans by using the file's sample index to choose local regions, then run the normal detector within those regions. If the sample index is unsupported, the candidate regions are too extensive, or a format cannot be analyzed safely, use a full scan. A faster path must preserve the full-scan boundary results for the supported and verified media set.
+検出はユーザーが要求したときだけ行います。一般的なH.264 MP4ではファイルのサンプル索引から局所的な走査範囲を選び、その範囲で通常の検出器を動かして高速化します。サンプル索引に対応できない場合、候補範囲が広すぎる場合、安全に解析できない形式の場合は全走査に切り替えます。高速経路でも、対応・検証済みメディアでは全走査と同じ境界を返すことを要件とします。
 
-This decision establishes correctness as a constraint on optimization. It does not freeze the sample-index heuristic, brightness thresholds, or benchmark target; those are implementation details that may change while preserving this constraint.
+この決定では、最適化より検出結果の正しさを優先します。サンプル索引のヒューリスティック、明るさの閾値、ベンチマーク対象は固定しません。この要件を保つ限り、実装詳細は変更できます。
 
-## Consequences
+## 影響
 
-- Typical supported files can be detected much faster without reducing the detector's precision inside selected regions.
-- Dense or unsupported files can remain as slow as a full scan; this is the intentional fallback when a safe acceleration is unavailable.
-- Changes to candidate selection require comparison against full-scan results, including coverage of varied real media.
-- Hard black or white intervals with visible content on both sides count as boundaries, whether they fade gradually or cut abruptly.
+- 一般的な対応ファイルでは、選択した範囲内の検出精度を落とさず大幅に高速化できます。
+- 候補が密集したファイルや未対応ファイルは全走査と同じ時間がかかる場合があります。安全な高速化ができないときの意図的なフォールバックです。
+- 候補選択を変更する場合、実際の多様な動画を含めて全走査との結果比較が必要です。
+- 前後に映像がある黒または白の区間は、徐々に変化するか急に切り替わるかにかかわらず境界として扱います。
 
-## Alternatives considered
+## 検討した代替案
 
-- **Always scan the full video:** Provides the reference result but can take minutes on long files.
-- **Use sparse approximate scans without fallback:** Improves speed on more files, but can miss real boundaries or introduce false positives.
+- **常に動画全体を走査する:** 基準となる結果を得られますが、長い動画では数分かかることがあります。
+- **フォールバックなしの疎な近似走査を行う:** より多くの動画で高速化できますが、実際の境界を見逃したり誤検出したりする可能性があります。
 
-## References
+## 参照資料
 
-- `docs/plans/2026-11-16-detection-another-10x.md` — observed real-media comparisons and fallback rationale (checked 2026-11-16).
-- `src-tauri/src/detection.rs`, `src-tauri/src/detection_candidates.rs`, and `src-tauri/tests/detection_integration.rs` — scanner behavior and regressions (checked 2026-11-16).
-- `README.md` — detection controls, supported behavior, and limitations (checked 2026-11-16).
+- `docs/plans/2026-11-16-detection-another-10x.md` — 実動画での比較とフォールバックの理由（2026-11-16確認）。
+- `src-tauri/src/detection.rs`、`src-tauri/src/detection_candidates.rs`、`src-tauri/tests/detection_integration.rs` — 走査処理と回帰テスト（2026-11-16確認）。
+- `README.md` — 検出操作、対応する動作、制限事項（2026-11-16確認）。

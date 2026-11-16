@@ -1,15 +1,15 @@
-# Faster chapter detection
+# チャプター検出の高速化
 
-**Goal:** Reduce first-scan time without lowering fade sensitivity, and avoid re-decoding an unchanged video on repeated scans.
+**目標:** フェード検出感度を下げずに初回走査を短くし、変更のない動画を繰り返し復号しない。
 
-**Evidence:** Read-only 120-second 960×540 H.264 benchmark: CPU 2 threads 1.103 s, CPU 4 threads 0.619 s, VideoToolbox 2.753–2.818 s. Every path produced the same 8,640,000 bytes and SHA-256 sample hash. The original user file is no longer at its supplied path, so these are synthetic fixture measurements, not promised timings for that file.
+**根拠:** 120秒、960×540のH.264素材を読み取り専用で計測。CPU 2スレッドは1.103秒、4スレッドは0.619秒、VideoToolboxは2.753〜2.818秒。どの経路も8,640,000バイトの同一データとSHA-256サンプルハッシュを返した。ユーザーが指定した元ファイルは計測時に指定パスからなくなっていたため、これは合成素材の結果であり、その動画での所要時間を保証するものではない。
 
-**Approach:** Cap CPU decode parallelism at four available cores; retain 5 fps / 160×90 samples and the exact fade algorithm. Cache one successful result, keyed by canonical source path, file size/modified timestamp and keyframes. Clear on closing media; never cache a failed or partial scan. Cancel must work on cache hits too.
+**方針:** CPU復号並列度は利用可能コア数の最大4に制限する。5 fps、160×90のサンプルと厳密なフェード判定を維持する。成功した結果を1件だけ、正規化した元パス・ファイルサイズ・更新時刻・キーフレームで識別してキャッシュする。動画を閉じたら消去し、失敗または部分結果は保存しない。キャッシュヒット中もキャンセルを確認する。
 
-- [x] Benchmark the entire Rust detector in debug and release before/after, with reproducible CLI example `detection_bench`.
-- [x] Add regression tests for repeated scan cache hits, source/path/mtime/keyframe changes, clear, cancellation (including cancellation in cache-hit callback) and failed scans; observed missing-cache API failure before implementation.
-- [x] Increase bounded decode parallelism, add cache, and integrate with native detection/session lifecycle.
-- [x] Confirm unchanged samples/results. Three-run release medians: 1.027791 s → 0.574855 s (1.7879×); debug 1.019045 s → 0.576673 s. Repeated cached lookup median 0.0000165 s inside the detector, excluding app UI/IPC overhead. Same synthetic 120-second 960×540 H.264 input, unchanged boundaries; exact sample SHA-256 already matched across thread counts.
-- [x] Independent read-only review `detection_speed_review`: no Critical/Important findings. Size/mtime fingerprint cannot identify an external rewrite preserving both metadata values; normal file changes and closes invalidate reuse.
-- [x] Full Rust suite: 26 tests passing, including 9 detection/cache tests; 20 Node tests, typecheck, fmt and clippy pass. Frontend UI code was not changed.
-- [x] macOS release build succeeds; app bundle 4.62 MiB.
+- [x] 再現可能な`detection_bench`例を使い、Rust検出器全体をデバッグ／リリースで変更前後に計測する。
+- [x] キャッシュヒット、パス／更新時刻／キーフレーム変更、消去、キャンセル（キャッシュヒット時のコールバックを含む）、失敗を回帰テストする。実装前にキャッシュAPIがないための失敗を確認。
+- [x] 復号並列度を制限し、キャッシュを追加してネイティブ検出／セッションのライフサイクルに統合する。
+- [x] サンプルと結果が変わらないことを確認する。3回計測したリリース中央値は1.027791秒→0.574855秒（1.7879倍）、デバッグ中央値は1.019045秒→0.576673秒。同じ合成120秒960×540 H.264入力で境界は不変。スレッド数を変えたときのサンプルSHA-256も一致した。キャッシュ検索中央値は検出器内で0.0000165秒（UI/IPC時間を除く）。
+- [x] 独立した読み取り専用レビュー`detection_speed_review`でCritical/Importantの指摘なし。ファイルサイズと更新時刻を保ったまま外部から書き換えられた場合は識別できないが、通常の変更とクローズでは無効化される。
+- [x] Rust全体26件（うち検出／キャッシュ9件）、Node 20件、型検査、fmt、Clippyが成功。フロントエンドUIコードは未変更。
+- [x] macOSリリースアプリのビルド成功。バンドル4.62 MiB。

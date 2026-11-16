@@ -1,35 +1,35 @@
 ---
 id: "0005"
-status: Accepted
+status: 採用
 date: "2026-11-14"
 ---
 
-# ADR 0005: Use corrected audio as the preview clock when offset
+# ADR 0005: 音ズレ補正時は補正後の音声をプレビューの基準時計にする
 
-## Context
+## 背景
 
-When the audio offset is zero, the native video element can decode and play the media together. When an offset is applied, audio must be played from a separate element. Repeatedly seeking that decoder to follow video can interrupt sound, especially after timeline scrubbing, while allowing the clocks to drift makes lip synchronization unreliable.
+音ズレ補正が0秒の場合は、標準の動画要素で映像と音声を一緒に復号・再生できます。補正を適用する場合は別の要素で音声を再生する必要があります。映像に合わせるため音声デコーダーを繰り返しシークすると、特にタイムライン操作後に音が途切れることがあります。時計のずれを放置すると、映像と音声の同期が不安定になります。
 
-## Decision
+## 決定
 
-Keep the native combined media path when the offset is zero. When an offset is active, play the corrected audio separately and treat its advancing playback clock as the reference. Align video after audio starts or recovers, and correct ordinary drift by adjusting video playback rate rather than repeatedly seeking the audio decoder.
+補正が0秒の場合は、映像と音声を標準の動画再生経路で一緒に再生します。補正中は音声を別に再生し、進行する音声の再生時計を基準にします。音声の再生開始・復帰後に映像を合わせ、その後の通常のずれは音声デコーダーを繰り返しシークせず、映像の再生速度を調整して補正します。
 
-This ADR does not set user-facing offset units, shortcut bindings, or the exact drift correction interval; those belong to the UI and player implementation.
+このADRでは、画面上の補正単位、ショートカット、ずれを補正する間隔を定めません。これらはUIとプレーヤーの実装に属します。
 
-## Consequences
+## 影響
 
-- Normal playback avoids a second audio decoder when no correction is requested.
-- Offset preview can preserve continuous audio through seeking and synchronization adjustments.
-- Video playback rate may vary slightly while correcting drift; the exported media is unaffected by preview synchronization.
-- WebView buffering and event ordering still require real-media regression tests.
+- 補正が不要な通常再生では、2つ目の音声デコーダーを使わずに済みます。
+- シークや同期調整中も、音ズレ補正付きプレビューの音声を途切れにくくできます。
+- ずれの補正中に映像の再生速度がわずかに変化することがあります。プレビュー同期は書き出しデータに影響しません。
+- WebViewのバッファリングとイベント順序は、実動画による回帰テストで引き続き確認する必要があります。
 
-## Alternatives considered
+## 検討した代替案
 
-- **Use video as the clock and repeatedly seek audio:** Simple to reason about initially, but can interrupt audio and lose alignment during buffered seeks.
-- **Resample or time-stretch audio to follow video:** Adds processing and changes preview audio behavior even though the requested correction is a constant offset.
+- **映像を基準時計にし、音声を繰り返しシークする:** 当初は分かりやすい方法ですが、音が途切れたり、バッファ中のシークで同期を失ったりします。
+- **映像に合わせて音声をリサンプルまたは伸縮する:** 処理が増え、求めている補正は一定の時間差なのにプレビュー音声の速度を変えてしまいます。
 
-## References
+## 参照資料
 
-- `docs/specs/2026-11-14-playback-fix.md` and `docs/specs/2026-11-15-seek-audio-fix.md` — playback clock decisions and seek regression evidence (checked 2026-11-16).
-- `src/player.ts` and `tests/e2e/player.spec.ts` — separate offset audio path, synchronization, and seek tests (checked 2026-11-16).
-- `README.md` — user-facing audio correction and preview limitations (checked 2026-11-16).
+- `docs/specs/2026-11-14-playback-fix.md`、`docs/specs/2026-11-15-seek-audio-fix.md` — 再生時計の設計とシーク時の回帰テスト根拠（2026-11-16確認）。
+- `src/player.ts`、`tests/e2e/player.spec.ts` — 音声分離経路、同期処理、シークテスト（2026-11-16確認）。
+- `README.md` — 音ズレ補正とプレビュー制限の説明（2026-11-16確認）。

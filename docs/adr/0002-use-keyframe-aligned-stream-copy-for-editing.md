@@ -1,35 +1,35 @@
 ---
 id: "0002"
-status: Accepted
+status: 採用
 date: "2026-11-13"
 ---
 
-# ADR 0002: Use keyframe-aligned stream copy for editing
+# ADR 0002: キーフレーム境界のストリームコピーで編集する
 
-## Context
+## 背景
 
-The primary editing goal is to remove and reorder portions of a local video while keeping the encoded video and audio unchanged. Re-encoding would add processing time and could reduce quality. Compressed video cannot in general be cut cleanly at an arbitrary frame without decoding and encoding around the boundary.
+主な編集目標は、映像と音声の符号化データを変えずにローカル動画の一部を削除・並べ替えることです。再エンコードは処理時間を増やし、画質を下げる可能性があります。圧縮動画は一般に、境界付近を復号・再エンコードせずに任意のフレームで正確に切れません。
 
-## Decision
+## 決定
 
-Represent edits as ordered source-time ranges, constrain cut boundaries to keyframes, and use FFmpeg stream copy to assemble the retained ranges. Apply a constant audio timestamp offset during export without re-encoding the media streams.
+編集内容は元動画の時刻範囲を順番に並べて表し、カット境界をキーフレームに限定します。残す範囲はFFmpegのストリームコピーで連結します。書き出し時にはメディアストリームを再エンコードせず、一定の音声タイムスタンプ補正を適用します。
 
-This decision does not define frame-accurate re-encoding, codec compatibility for every output container, or embedded container chapter metadata. Those remain outside the current editing model and are documented in the user guide.
+この決定は、フレーム単位の再エンコード、すべての出力コンテナとのコーデック互換性、コンテナ内チャプターメタデータを定めません。これらは現在の編集モデルの対象外とし、ユーザーガイドに記載します。
 
-## Consequences
+## 影響
 
-- For supported inputs and boundaries, export preserves the encoded media payload and avoids video re-encoding.
-- Cuts are limited to keyframes; open GOPs and packet timing can affect boundary behavior and audio offset precision.
-- Some source codec and destination container combinations cannot be copied directly and may fail rather than silently transcode.
-- Future frame-accurate editing would require a separate mode with local re-encoding and explicit quality/performance tradeoffs.
+- 対応する入力と境界では、符号化済みメディアデータを保ったまま書き出し、映像の再エンコードを避けられます。
+- カットはキーフレームに限られます。open GOPやパケット時刻によって、境界の挙動や音ズレ補正の精度が変わることがあります。
+- 入力コーデックと出力コンテナの組み合わせによっては直接コピーできず、暗黙に再エンコードするのではなくエラーになる場合があります。
+- 将来フレーム精度の編集に対応する場合は、画質と速度のトレードオフを明示した別モードが必要です。
 
-## Alternatives considered
+## 検討した代替案
 
-- **Re-encode every export:** Supports arbitrary boundaries and broad output compatibility, but adds time and changes encoded media.
-- **Re-encode only around cuts:** Improves boundary precision but adds substantially more pipeline complexity and can create codec or quality differences at joins.
+- **書き出し時に毎回再エンコードする:** 任意の境界と幅広い形式に対応できますが、時間がかかり符号化データも変わります。
+- **カット境界だけ再エンコードする:** 境界精度を上げられますが、処理系が大幅に複雑になり、接合部でコーデックや画質に差が出ることがあります。
 
-## References
+## 参照資料
 
-- `docs/specs/2026-11-13-minimal-video-editor-design.md` — source-range and stream-copy design (checked 2026-11-16).
-- `src-tauri/src/export.rs` and `src-tauri/tests/media_integration.rs` — range validation, remuxing, and packet-preservation checks (checked 2026-11-16).
-- [FFmpeg stream copy documentation](https://ffmpeg.org/ffmpeg.html#Streamcopy) — stream-copy behavior and limitations (checked 2026-11-16).
+- `docs/specs/2026-11-13-minimal-video-editor-design.md` — 元動画の時刻範囲とストリームコピーの設計（2026-11-16確認）。
+- `src-tauri/src/export.rs`、`src-tauri/tests/media_integration.rs` — 範囲検証、再多重化、パケット保持の確認（2026-11-16確認）。
+- [FFmpeg公式のストリームコピー説明](https://ffmpeg.org/ffmpeg.html#Streamcopy) — ストリームコピーの動作と制限（2026-11-16確認）。

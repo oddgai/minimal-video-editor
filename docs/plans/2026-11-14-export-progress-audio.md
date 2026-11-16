@@ -1,62 +1,62 @@
-# Export progress and source audio correction
+# 書き出し進捗と音ズレ補正時の音声選択
 
-> **For agentic workers:** Use superpowers:executing-plans to implement these tasks inline.
+> **エージェントで作業する場合:** この計画に沿って各タスクを実装する。
 
-**Goal:** Show export progress in a modal and preserve available source audio when correcting sync across cuts.
+**目標:** 書き出し進捗をモーダル表示し、カットをまたぐ音ズレ補正で元動画に残っている音声を維持する。
 
-**Architecture:** Reuse the native export-progress events, cancellation, and job IDs. Select corrected audio from the original source for each retained video range, before concatenating the ranges; keep packet copy for both streams.
+**構成:** ネイティブの書き出し進捗イベント、キャンセル、ジョブIDを再利用する。各残存映像区間に合わせ、元動画から補正後の音声を選択してから区間を連結する。両方のストリームはパケットコピーする。
 
-**Tech Stack:** Tauri, TypeScript, Rust, FFmpeg, Playwright.
+**技術:** Tauri、TypeScript、Rust、FFmpeg、Playwright。
 
-**Spec:** User requests in this conversation: an export progress dialog and a fix for silence introduced by audio correction. Detailed design was delegated earlier.
+**仕様:** この会話中のユーザー要望は、書き出し進捗ダイアログと音ズレ補正時に生じる無音の修正。詳細設計は以前に委任済み。
 
-## Global constraints
+## 全体制約
 
-- Use pnpm; keep macOS app lightweight and preserve Windows support.
-- Preserve encoded video/audio packets and safe export cancellation/no-overwrite behavior.
-- Positive offset delays audio; source audio at video time t is t minus offset.
-- Pending user choice: retain video length or omit video edges where original audio does not exist. Do not implement a destructive duration change before that answer.
+- pnpmを使い、macOSアプリを軽量に保ち、Windows対応を維持する。
+- 符号化済み映像・音声パケットと安全なキャンセル・上書き防止を維持する。
+- 正の補正は音声を遅らせる。映像時刻`t`に対応する元音声は`t - offset`。
+- 保留中の確認事項: 元動画に音声がない端では動画の長さを保つか、元音声がない映像端を削るか。回答前に動画を短くする破壊的変更を加えない。
 
-## Review focus
+## レビュー時の重点
 
-- Cancellation/error must close the modal and allow another export.
-- Escape/backdrop must not hide a running export or discard its cancellation control.
-- Per-job progress must ignore stale jobs; exporting must block editing shortcuts.
-- Shifted audio must use source packets outside retained video ranges when available.
-- Keep B-frame boundaries, nonzero source timestamps, and no-audio files working.
+- キャンセルやエラーでモーダルを閉じ、次の書き出しを可能にする。
+- Escapeや背景クリックで実行中の書き出しを隠したり、キャンセル手段を失わせたりしない。
+- ジョブごとの進捗は古いジョブを無視し、書き出し中は編集ショートカットを無効にする。
+- シフトした音声に、残存映像範囲外であっても元音声が存在する区間を使う。
+- Bフレーム境界、0以外の元時刻、無音動画を引き続き扱える。
 
-## Task 1: Export progress modal
+### タスク1: 書き出し進捗モーダル
 
-Files: `src/main.ts`, `src/styles.css`, `tests/e2e/native-mock.ts`, `tests/e2e/editor.spec.ts`.
+**対象:** `src/main.ts`、`src/styles.css`、`tests/e2e/native-mock.ts`、`tests/e2e/editor.spec.ts`。
 
-- [x] Add an IPC-boundary test holding an export open, delivering progress, and completing/cancelling/failing it.
-- [x] Confirm the test fails because the current progress panel is not modal.
-- [x] Convert the existing panel to a labelled dialog with stage, percentage, progress bar, output path and cancel button. Later user direction: block shortcuts and body operations while open, show OK after success and retain the dialog until acknowledged.
-- [x] Run frontend tests/typecheck.
+- [x] IPC境界で書き出しを保留し、進捗を送り、完了・キャンセル・失敗を確認するテストを追加する。
+- [x] 進捗パネルがモーダルでないためテストが失敗することを確認する。
+- [x] ステージ、割合、進捗バー、出力先、キャンセルボタンを持つラベル付きダイアログに変更する。後の要望に従い、表示中はショートカットと本体操作を止め、成功時はOKを出し、確認されるまでダイアログを残す。
+- [x] フロントエンドのテストと型検査を実行する。
 
-## Task 2: Correct source audio selection
+### タスク2: 補正後の元音声選択
 
-Files: `src-tauri/src/export.rs`, `src-tauri/tests/media_integration.rs`, `README.md`.
+**対象:** `src-tauri/src/export.rs`、`src-tauri/tests/media_integration.rs`、`README.md`。
 
-- [x] Add real FFmpeg regression tests verifying shifted source audio packets and audible coverage at retained range edges/joins for both signs.
-- [x] Confirm tests reproduce the current incorrect audio selection.
-- [x] Implement source-relative audio selection before cuts, retaining existing video length. Preserve empty audio headers in intermediate MOV/MP4 segments and prune packet preroll before joins. Tests cover ±12 seconds, B frames, nonzero source origin, and whole empty edge chapters in MP4/MOV/MKV.
-- [ ] Resolve source-edge preference from the pending answer; only omit video edges if the user chooses that behavior.
-- [x] Run Rust integration tests, fmt/clippy and frontend regression tests: 17 Node, 10 Playwright, 16 Rust tests pass; typecheck/clippy/fmt pass.
-- [x] Build the macOS app: release bundle succeeded, 4.57 MiB.
-- [x] Review the final changes and report behavior and unavoidable source limitations. Source-edge clipping remains pending the user's preference.
+- [x] 正負両方で、シフト後の元音声パケットと残存範囲の端・接合点で音があることを確認する実FFmpeg回帰テストを追加する。
+- [x] 誤った音声選択を現状のテストで再現する。
+- [x] カット前に元動画の時刻から音声範囲を選び、既存の映像長を保つ。中間MP4/MOV区間で音声ヘッダーを空のまま維持し、接合前にパケットの先読みを除外する。MP4/MOV/MKVで±12秒、Bフレーム、0以外の時刻、音声がない端のチャプターを確認する。
+- [ ] 保留中の回答に基づき、元音声がない端の扱いを決める。動画端を省くのはユーザーが選択した場合のみ。
+- [x] Rust結合テスト、fmt/Clippy、フロントエンド回帰テストを実行。Node 17件、Playwright 10件、Rust 16件が成功し、型検査・Clippy・fmtも成功。
+- [x] macOSアプリをビルド。4.57 MiBのリリースバンドル作成に成功。
+- [x] 変更をレビューし、動作と元音声に由来する制限を報告する。既存の動画長を維持し、カット前の音声補正による不要な無音だけを解消。動画端を暗黙に削らない。
 
-## Task 3: Close and quit shortcuts (added by user)
+### タスク3: 閉じる／終了ショートカット（ユーザー追加）
 
-Files: `src/main.ts`, `src/bridge.ts`, `src/player.ts`, `src-tauri/src/lib.rs`, frontend tests and README.
+**対象:** `src/main.ts`、`src/bridge.ts`、`src/player.ts`、`src-tauri/src/lib.rs`、フロントエンドテスト、README。
 
-- [x] Add failing UI test for Cmd/Ctrl W clearing media, edits, offset and decoder sources, and reopening successfully; Cmd/Ctrl Q requests exit.
-- [x] Implement unload/native close cleanup (session, scan, preview server, destination) and native quit command.
-- [x] Replace predefined native close/quit accelerators with app command menu events, guarded by the progress modal.
-- [x] Confirm W/Q are ignored during running and completed modal states. Review found completion-modal drag/drop bypass; include dialog openness in busy(), rerender after OK, and test native event/drop paths as well.
+- [x] `Cmd/Ctrl+W`で動画・編集・補正・デコーダーを初期状態に戻し、再度読み込めること、`Cmd/Ctrl+Q`で終了要求を出すことの失敗テストを追加する。
+- [x] アンロード／ネイティブ終了時のセッション、走査、プレビューサーバー、出力先の後片付けを実装する。
+- [x] 進捗モーダルの表示中はアプリ用終了メニューを無効化する。
+- [x] 実行中と完了表示中にW/Qを無視する。レビューで完了モーダル中のドラッグ＆ドロップが操作できる問題を発見し、`busy()`にダイアログ表示を含めてOK後に再描画し、ネイティブイベント／ドロップ経路をテストする。
 
-## Review
+## レビュー
 
-Fresh read-only review `export_changes_review`: no remaining Critical/Important findings after the modal busy guard. Independently exercised wholly missing source audio with ±12-second offsets for MP4 and MKV. Native menu behavior inspected, not interactively automated.
+独立レビュー`export_changes_review`では、モーダル中の操作ガードを追加した後に重大な指摘は残っていない。元音声が完全にないケースを、MP4とMKVで±12秒補正して個別に確認した。ネイティブメニューの動作はコード確認のみで自動対話テストはしていない。
 
-Source-edge choice remains unanswered as of verification. Existing video duration is preserved; only unnecessary silence caused by cutting audio before correction is fixed. No video edges have been silently removed.
+元音声がない端の扱いは、検証時点で未回答。既存の動画尺を維持し、音声補正前に音声をカットしたことで発生する不要な無音だけを直した。動画端は削除していない。

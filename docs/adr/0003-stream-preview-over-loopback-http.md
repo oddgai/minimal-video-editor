@@ -1,35 +1,35 @@
 ---
 id: "0003"
-status: Accepted
+status: 採用
 date: "2026-11-14"
 ---
 
-# ADR 0003: Stream local media to the WebView over loopback HTTP
+# ADR 0003: ループバックHTTPでローカルメディアをWebViewへ配信する
 
-## Context
+## 背景
 
-Large MP4 files did not play reliably in the macOS WebView through the custom asset URL protocol, whose range responses were capped. Loading the whole video into application memory or creating a converted preview would add memory, startup time, and disk usage.
+カスタムアセットURLプロトコルでは範囲応答に上限があり、大きなMP4をmacOSのWebViewで安定して再生できませんでした。動画全体をアプリのメモリに読み込んだり、変換済みプレビューを作成したりすると、メモリ使用量・起動時間・ディスク使用量が増えます。
 
-## Decision
+## 決定
 
-Serve only the selected local media file through a loopback HTTP endpoint that supports byte ranges. Bound each transfer buffer and connection count, scope the route to the current media selection, and revoke it when the selection changes or the app exits.
+選択中のローカルメディアだけを、バイト範囲に対応したループバックHTTPエンドポイントから配信します。転送バッファと接続数に上限を設け、ルートを現在のメディア選択に紐付けます。選択の変更時またはアプリ終了時にルートを無効化します。
 
-This ADR does not define preview UI behavior or media codecs supported by each operating system's WebView; those are covered by the player implementation and user documentation.
+このADRではプレビューUIや各OSのWebViewが対応するコーデックを定めません。これらはプレーヤーの実装とユーザー向けドキュメントで扱います。
 
-## Consequences
+## 影響
 
-- Large files can be read on demand without copying the full file into memory or generating a proxy.
-- The local server must strictly limit access to the selected file and reject requests that do not match its loopback-only route.
-- Playback remains dependent on native WebView codec support.
-- Server lifecycle, request ranges, cancellation, and stale media tokens require regression coverage.
+- ファイル全体をメモリにコピーしたりプロキシを生成したりせず、大きな動画を必要な範囲だけ読み込めます。
+- ローカルサーバーは選択中のファイルだけに厳密にアクセスを限定し、ループバック専用ルートに一致しない要求を拒否する必要があります。
+- 再生可能な形式は引き続きOS標準のWebViewのコーデック対応に依存します。
+- サーバーのライフサイクル、要求範囲、キャンセル、古いメディアトークンを回帰テストで確認する必要があります。
 
-## Alternatives considered
+## 検討した代替案
 
-- **Custom asset protocol:** Simpler integration, but its capped range responses caused unreliable playback for large MP4s.
-- **Load the entire file or generate a proxy:** Avoids range-protocol constraints but uses more memory, time, or disk space.
+- **カスタムアセットプロトコル:** 組み込みは簡単ですが、範囲応答の上限により大きなMP4の再生が不安定でした。
+- **動画全体を読み込む、またはプロキシを生成する:** 範囲プロトコルの制約を避けられますが、メモリ・時間・ディスクのいずれかを多く消費します。
 
-## References
+## 参照資料
 
-- `docs/specs/2026-11-14-playback-fix.md` — playback failure investigation and loopback design (checked 2026-11-16).
-- `src-tauri/src/preview.rs` and `src-tauri/tests/preview_stream.rs` — range handling, bounded reads, route validation, and tests (checked 2026-11-16).
-- `README.md` — user-facing statement of local streaming and supported preview behavior (checked 2026-11-16).
+- `docs/specs/2026-11-14-playback-fix.md` — 再生障害の調査とループバック方式の設計（2026-11-16確認）。
+- `src-tauri/src/preview.rs`、`src-tauri/tests/preview_stream.rs` — 範囲処理、読み込み上限、ルート検証とテスト（2026-11-16確認）。
+- `README.md` — ローカル配信とプレビュー対応範囲の説明（2026-11-16確認）。

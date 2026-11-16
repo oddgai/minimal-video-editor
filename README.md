@@ -1,120 +1,119 @@
 # Minimal Video Editor
 
-macOS を中心にした、キーボードで操作できる軽量な動画編集アプリです。必要な区間だけを残し、音声のタイミングを補正して、再エンコードせずに書き出します。
+A lightweight, keyboard-first desktop video editor focused on macOS, with a Windows-compatible architecture. Keep the ranges you need, correct a constant audio offset, and export without re-encoding.
 
-Tauri 2 + Rust + TypeScript。Chromium や Node.js をアプリに同梱せず、OS の WebView を使います。動画全体を JavaScript のメモリに読み込まず、波形・サムネイル・プロキシの常時生成もしません。編集と書き出しはすべてローカルで完結します。
+Built with Tauri 2, Rust, and TypeScript. The app uses the operating system's WebView instead of bundling Chromium or Node.js. It does not load whole videos into JavaScript memory or continuously generate waveforms, thumbnails, or proxies. Editing and export run locally.
 
-## できること
+## Features
 
-- ファイル選択・ドラッグ＆ドロップでローカル動画を開く
-- 再生、前後のキーフレーム・指定時刻への移動
-- キーフレーム上で動画を分割し、チャプターを選択して削除
-- 削除したチャプターを詰めたタイムラインと、残ったチャプターの連続プレビュー
-- 残ったチャプターを一つの動画として無劣化で出力
-- 音声を秒数指定で早める／遅らせる（プレビュー・出力に反映）
-- 取り消し・やり直し、書き出し進捗・キャンセル
-- 元ファイルや既存の保存先への上書きを防止
+- Open local videos using the file picker or drag and drop.
+- Play and navigate to keyframes or a specified time.
+- Split at keyframes, select chapters, and delete them.
+- Keep the timeline compact after deletion and preview the remaining chapters continuously.
+- Export the remaining chapters as one video without re-encoding.
+- Correct audio timing by a number of seconds in both preview and export.
+- Undo and redo edits; monitor or cancel exports.
+- Prevent overwriting the source file or an existing destination.
 
-## 開発・起動
+## Development
 
-必要なもの：Node.js 24 以上、pnpm（`package.json` に固定バージョンを指定）、Rust stable、FFmpeg / ffprobe。macOS では Xcode Command Line Tools、Windows では MSVC の C++ ビルドツールと WebView2 も必要です。
+Requirements: Node.js 24 or later, the pinned pnpm version from `package.json`, stable Rust, FFmpeg, and ffprobe. macOS also requires Xcode Command Line Tools. Windows requires the MSVC C++ build tools and WebView2.
 
-macOS:
+On macOS:
 
 ```sh
-xcode-select --install  # 未導入の場合のみ
+xcode-select --install  # Only if not already installed
 brew install ffmpeg
 pnpm install
 pnpm desktop
 ```
 
-mise を使う場合は、プロジェクトの `mise.toml` にバージョンを記載しています。信頼を確認したうえで `mise trust` / `mise install` を実行してください。
+The project pins tool versions in `mise.toml`. Review the file before trusting it, then run `mise trust` and `mise install` if desired.
 
-Windows は FFmpeg の `bin`（`ffmpeg.exe` と `ffprobe.exe` の両方を含む）を PATH に追加し、上記と同じ pnpm コマンドで起動できます。Windows での対話操作は未検証です。
+On Windows, add the FFmpeg `bin` directory (containing both `ffmpeg.exe` and `ffprobe.exe`) to `PATH`, then use the same pnpm commands. Interactive Windows behavior has not been verified.
 
-`pnpm dev` はブラウザでの画面確認用です。ファイルの読み込み・解析・出力には `pnpm desktop` で起動したデスクトップアプリが必要です。
+`pnpm dev` starts the UI for browser-based layout checks. Opening, analyzing, and exporting files require the desktop app started by `pnpm desktop`.
 
-## アプリをビルド
+## Build the app
 
 ```sh
 pnpm desktop:build
 ```
 
-macOS の出力先:
+The macOS bundle is written to:
 
 ```text
 src-tauri/target/release/bundle/macos/Minimal Video Editor.app
 ```
 
-Windows は `src-tauri/tauri.windows.conf.json` の設定に従って NSIS インストーラーを生成します。macOS のビルドはビルドした CPU アーキテクチャ向けです。初回ビルドは Rust の依存ライブラリのコンパイルに時間がかかります。
+On Windows, the build configuration in `src-tauri/tauri.windows.conf.json` produces an NSIS installer. macOS builds target the architecture used to build them. The first build may take a while while Rust dependencies compile.
 
-FFmpeg は現時点では同梱していません。アプリは次の順で実行ファイルを探します。
+FFmpeg is not currently bundled; installing it is still required. The app searches for executables in this order:
 
-1. 環境変数 `MVE_FFMPEG` / `MVE_FFPROBE` で指定したファイル
-2. アプリの実行ファイルと同じフォルダー、macOS の `Contents/Resources`
-3. `/opt/homebrew/bin`、`/usr/local/bin`
-4. PATH
+1. Paths set by `MVE_FFMPEG` and `MVE_FFPROBE`.
+2. The app executable's directory and, on macOS, `Contents/Resources`.
+3. `/opt/homebrew/bin` and `/usr/local/bin`.
+4. `PATH`.
 
-配布用の署名・公証は未設定です。FFmpeg を同梱して配布する場合は、対応するビルドの依存ライブラリ・ライセンスも含めて準備してください。
+Code signing and notarization are not configured. The project plans to bundle per-platform LGPL builds of FFmpeg and ffprobe; see [ADR 0006](docs/adr/0006-bundle-lgpl-ffmpeg.md). The current app still requires a separate FFmpeg installation.
 
-## 使い方
+## Usage
 
-1. **Choose file** または `⌘ O` / `Ctrl O` で動画を開きます。画面は英語表記です。キーフレームの解析はバックグラウンドで進み、その間も再生できます。
-2. `← / →` でキーフレームへ移動し、`S` で分割します。分割された一つ一つの区間が「チャプター」です。分割後は右側の新しいチャプターが選択されます。動画の先頭・末尾、既存の分割点では分割しません。
-3. `⌘ ← / →`（Windows は `Ctrl ← / →`）またはタイムライン上のチャプターをクリックして選び、`D` で削除します。チャプター・シークバーのクリックは、クリック位置に最も近い残存キーフレームへ移動します。削除するとタイムラインから消え、後ろのチャプターが左に詰まります。プレビューも削除した部分を飛ばして再生します。
-4. 再生位置とタイムラインは編集後の時刻を表示します。時刻表示をクリックすると **Go to time** を開き、ホバーすると元動画上の時刻を確認できます。分割・削除は `⌘ Z` / `Ctrl Z` で取り消せます。
-5. 必要なら下部の **Audio offset** に音ズレ補正を入力します。**正の値は音声を遅らせ、負の値は音声を早めます。** 例: `0.25` は音声を 0.25 秒遅らせます。＋／−ボタンとショートカットは1秒ずつ調整します。
-6. 下部の **Export** または `⌘ S` / `Ctrl S` で別名保存します。保存先の拡張子は MP4 / MOV / MKV / WebM / M4V が使えます。コーデックが保存形式に対応しない場合はエラーを表示するので、MKV などを試してください。
+1. Open a video with **Choose file** or `⌘ O` / `Ctrl O`. The UI is in English. Keyframes are analyzed in the background, so playback can begin while analysis continues.
+2. Use `← / →` to move between keyframes and `S` to split. Each resulting segment is a chapter. The new chapter on the right is selected after a split. Splits are unavailable at the source start/end or an existing boundary.
+3. Select a chapter with `⌘ ← / →` (Windows: `Ctrl ← / →`) or click it on the timeline, then press `D` to delete it. Clicking a chapter or the seek bar moves to the nearest retained keyframe. Deleting a chapter removes it from the timeline and closes the gap; playback skips deleted sections.
+4. The playhead and timeline show edited time. Click the time display to open **Go to time**; hover over it to see the corresponding source time. Undo splits and deletions with `⌘ Z` / `Ctrl Z`.
+5. If needed, enter an audio correction in **Audio offset**. **Positive values delay audio; negative values advance it.** For example, `0.25` delays audio by a quarter second. The plus/minus buttons and shortcuts change the value by one second.
+6. Use **Export** or `⌘ S` / `Ctrl S` to save a copy. Supported destination extensions include MP4, MOV, MKV, WebM, and M4V. If the codecs are incompatible with the selected container, the app reports an error; try a container such as MKV.
 
-ファイル情報は下部の情報アイコン（**File info**）、ショートカット一覧はキーボードアイコンから開きます。初期画面でもキーボードアイコンと `?` で一覧を開けます。
+Open file details with the information icon (**File info**) and shortcuts with the keyboard icon. The shortcut list is also available from the empty screen using the keyboard icon or `?`.
 
-チャプターはタイムライン上でドラッグして並べ替えられます。選択中のチャプターを `⌘ Shift ← / →`（Windows は `Ctrl Shift ← / →`）でも移動できます。並べ替えは再生・書き出しの順番に反映され、`⌘ Z` / `Ctrl Z` で取り消せます。
+Reorder chapters by dragging them on the timeline or by pressing `⌘ Shift ← / →` (Windows: `Ctrl Shift ← / →`) for the selected chapter. The order affects playback and export. Reordering can be undone with `⌘ Z` / `Ctrl Z`.
 
-下部の検出アイコン（**Detect chapters**）または `⌘ Shift D` / `Ctrl Shift D` で、黒・白への明暗転からチャプターを自動検出します。検出した位置は近いキーフレームに合わせて分割します。既存の削除・並べ替え・音声補正を保ち、追加した分割をまとめて取り消せます。進捗ダイアログからキャンセルでき、キャンセルした場合は編集を変更しません。
+Use the detection icon (**Detect chapters**) or `⌘ Shift D` / `Ctrl Shift D` to find transitions to black or white. Each detected location is snapped to a nearby keyframe. Existing deletions, order, and audio correction are preserved; all new splits can be undone together. Detection can be cancelled in its progress dialog, and cancellation leaves the edit unchanged.
 
-自動検出は明示的に実行したときだけ動画を解析します。小さいグレースケール画像を毎秒5枚調べ、CPUの使用可能数に応じて最大4スレッドでデコードします。成功した結果をアプリ内に1件だけ保持し、動画のパス・サイズ・更新日時・キーフレームが同じなら再検出時に再利用します。動画を閉じると保持した結果も破棄します。初回は動画全体のデコードが必要なので、長い動画では時間がかかります。前後に映像があれば、段階的なフェードに加えて急な黒・白画面への切り替わりも分割します。短い変化・不完全なフェード・テロップ等が残る明転は見逃す場合があり、冒頭・末尾の暗転や単なる場面切り替えは分割しません。
+Detection runs only when requested. It analyzes small grayscale frames at 5 fps and uses up to four decoder threads, depending on available CPU cores. One successful result is cached in memory and reused if the source path, file size, modification time, and keyframes are unchanged. Closing the video clears the cache. The first scan decodes the video and can take time on long files. Black or white intervals with visible content on both sides are split, whether they fade gradually or cut abruptly. Short changes, incomplete fades, or bright transitions obscured by titles may be missed; leading/trailing dark intervals and ordinary scene cuts are ignored.
 
-再生中にキーフレーム・チャプター・タイムライン・指定時刻へ移動しても、再生を続けます。停止中の移動は停止したままで、編集後の末尾へ移動した場合は停止します。
-再生中に左右キーを続けて押した場合は、直前の移動先を基準に前後のキーフレームへ進みます。通常再生が次のキーフレームを越えた後は、現在の再生位置を基準に戻ります。
+Navigation to keyframes, chapters, timeline positions, or a specified time preserves playback when already playing. A paused video stays paused; moving to the edited end stops playback. Repeated arrow presses during playback use the previous requested destination as their origin until normal playback passes the next keyframe, then return to using the live playhead.
 
-## キーボードショートカット
+## Keyboard shortcuts
 
-| 操作 | macOS | Windows |
+| Action | macOS | Windows |
 | --- | --- | --- |
-| 動画を開く | `⌘ O` | `Ctrl O` |
-| 書き出す | `⌘ S` | `Ctrl S` |
-| 動画を閉じて初期画面へ戻る | `⌘ W` | `Ctrl W` |
-| アプリを終了 | `⌘ Q` | `Ctrl Q` |
-| 再生・停止 | `Space` | `Space` |
-| キーフレーム移動 | `← / →` | 同左 |
-| チャプターを分割 | `S` | 同左 |
-| チャプター選択 | `⌘ ← / →` | `Ctrl ← / →` |
-| チャプターを並べ替え | `⌘ Shift ← / →` | `Ctrl Shift ← / →` |
-| 明暗転から自動検出 | `⌘ Shift D` | `Ctrl Shift D` |
-| チャプターを削除 | `D` | 同左 |
-| 取り消し | `⌘ Z` | `Ctrl Z` |
-| やり直し | `⌘ Shift Z` | `Ctrl Shift Z` |
-| 音声を1秒早める／遅らせる | `[ / ]` | 同左 |
-| ショートカット一覧 | `?` | 同左 |
+| Open video | `⌘ O` | `Ctrl O` |
+| Export | `⌘ S` | `Ctrl S` |
+| Close video and return to the start screen | `⌘ W` | `Ctrl W` |
+| Quit the app | `⌘ Q` | `Ctrl Q` |
+| Play / pause | `Space` | `Space` |
+| Move between keyframes | `← / →` | Same |
+| Split chapter | `S` | Same |
+| Select chapter | `⌘ ← / →` | `Ctrl ← / →` |
+| Reorder chapter | `⌘ Shift ← / →` | `Ctrl Shift ← / →` |
+| Detect transitions | `⌘ Shift D` | `Ctrl Shift D` |
+| Delete chapter | `D` | Same |
+| Undo | `⌘ Z` | `Ctrl Z` |
+| Redo | `⌘ Shift Z` | `Ctrl Shift Z` |
+| Advance / delay audio by one second | `[ / ]` | Same |
+| Show shortcuts | `?` | Same |
 
-入力欄での文字入力中は、編集ショートカットを無効にします。書き出しの `⌘ S` / `Ctrl S` は入力中の値を確定してから実行します。フォーカスしたボタンは Enter / Space でも操作できます。
+Editing shortcuts are disabled while typing in an input. `⌘ S` / `Ctrl S` commits the active input before export. Focused buttons can also be activated with Enter or Space.
 
-書き出し中は進捗ダイアログを最前面に表示します。進捗バー・処理内容・保存先を確認でき、キャンセルできます。成功後は100%表示とOKボタンに切り替わります。OKを押すまで、本体の操作・ドラッグ＆ドロップ・アプリ用ショートカット（終了を含む）は無効です。
+During export, a progress dialog stays in front. It shows progress, the current stage, and the destination, and provides a cancel button. On success it shows 100% and an OK button. The editor, drag and drop, and app shortcuts (including quit) remain disabled until OK is pressed.
 
-## 精度・対応範囲
+## Precision and limitations
 
-- **無劣化カットはキーフレーム単位**です。任意フレームでの正確な切り出しや部分再エンコードは行いません。open GOP など、キーフレームの外の映像を参照する形式では、境界付近に乱れが出る場合があります。
-- 音声は元動画上で補正後の範囲を選んでから、映像と一緒に切り出します。カット区間の前後に音声が残っていれば使用します。圧縮パケット単位でコピーするため、境界や補正時刻にはコーデックのパケット長に応じた誤差が出ます。映像の長さは維持するため、元動画の範囲を超える音声は無音になります（例：全編を−12秒補正した場合の末尾12秒）。
-- プレビューできる形式は OS の WebView が対応するものに限ります。H.264 / AAC の MP4 を推奨します。MKV などを再生できなくても、解析・時刻指定・カット・書き出しは利用できます。自動で高負荷な変換は行いません。
-- プレビューは端末内だけの HTTP ストリーミングで読み込みます。選択したファイルにだけ使える一時 URL を発行し、64 KiB ずつ転送するため、大きな動画も全体をメモリに読み込みません。動画のアップロードや事前変換は行いません。
-- 音声補正なしでは映像と音声を一緒に再生します。補正時だけ音声を分離し、音声の時計を基準に映像を同期させます。音声デコーダーを繰り返しシークさせず、細かなずれは映像の再生速度で調整します。書き出しデータの速度や画質は変更しません。
-- キーフレーム移動と分割には実際のパケット時刻を使います。隣接するチャプターは書き出し時にまとめ、不要なカット・連結を避けます。
-- 書き出すのは先頭の映像と、存在する場合は先頭の音声トラックです。複数音声・字幕・埋め込みのチャプターメタデータの保持には未対応です。このアプリの「チャプター」は編集単位を指します。
-- プレビューは元ファイルをシークして残ったチャプターを再生するため、つなぎ目の描画や音声補正は、書き出した動画と完全に同一にはならない場合があります。
-- 一定秒数の音ズレを補正します。自動補正、時間とともに広がるズレの補正、フィルター、複数素材の編集には未対応です。
-- 書き出しには一時的に追加の空き容量が必要です。区間のコピー・連結・最終出力を保存先の隣に作り、成功時だけ完成ファイルを公開します。通常の終了・キャンセル時には一時ファイルを削除します。
+- **Lossless cuts are keyframe-aligned.** Arbitrary-frame cuts and partial re-encoding are not supported. Formats that reference frames outside a keyframe, such as some open-GOP streams, may show artifacts near boundaries.
+- Audio is selected from the source after applying the correction, then cut with the video. Audio outside the source duration is silent so the video duration stays unchanged. Stream-copy packet boundaries can introduce timing error based on the codec's packet duration. For example, correcting the whole video by −12 seconds leaves the last 12 seconds without source audio.
+- Preview depends on codecs supported by the operating system's WebView. H.264/AAC MP4 is recommended. Even if formats such as MKV cannot be previewed, analysis, time navigation, editing, and export remain available. The app does not automatically run an expensive conversion.
+- Preview uses local HTTP streaming and a temporary URL scoped to the selected file. It transfers data in 64 KiB chunks, so it does not load the whole video into memory. The video is not uploaded or pre-converted.
+- With no audio correction, video and audio play together. When correction is active, a separate audio stream provides the playback clock and video playback rate is adjusted for small drift. This does not change export speed or quality.
+- Keyframe navigation and splits use packet timestamps. Adjacent chapters are joined during export to avoid unnecessary cuts and joins.
+- Export includes the first video stream and, if present, the first audio stream. Multiple audio streams, subtitles, and embedded container chapter metadata are not preserved. “Chapters” in this app are editing segments.
+- Preview seeks the source file and plays retained chapters in order; rendering at joins and audio correction may differ from the exported file.
+- The app corrects a constant audio offset. Automatic synchronization, drift that changes over time, filters, and multitrack editing are not supported.
+- Export temporarily requires additional free disk space. Intermediate ranges, joins, and the final output are written beside the destination. The final file is published only on success; temporary files are removed after ordinary completion or cancellation.
 
-## 検証
+## Verification
 
 ```sh
 pnpm test
@@ -127,11 +126,13 @@ pnpm exec playwright install chromium
 pnpm test:ui
 ```
 
-Rust の結合テストは実際の FFmpeg で素材を生成し、カット後の映像パケットと音声パケットの SHA-256、B フレームの復号結果、正負の音声オフセット、無音動画、Unicode・空白・引用符を含むパス、上書き防止、キャンセル後の後片付けを確認します。画面テストでは IPC の境界を差し替えてチャプター操作・ショートカットを確認し、生成した実動画で削除後の表示フレーム、末尾停止・再開、音声補正も検証します。OS のネイティブ再生・ダイアログの対話試験は別途必要です。
+Rust integration tests generate media with FFmpeg and check SHA-256 hashes of copied video/audio packets, B-frame decoding, positive and negative offsets, silent video, paths containing Unicode/spaces/quotes, overwrite protection, and cleanup after cancellation. UI tests replace the IPC boundary to check chapter operations and shortcuts, and use generated videos to verify displayed frames after deletion, end-of-playback behavior, and audio correction. Interactive tests of native playback and dialogs on each OS are still needed.
 
-アーキテクチャ上の決定は [docs/adr](docs/adr)、設計と実装計画は [docs/specs](docs/specs) と [docs/plans](docs/plans) にあります。実装は [Tauri のコマンド API](https://v2.tauri.app/develop/calling-rust/)、[FFmpeg のストリームコピー](https://ffmpeg.org/ffmpeg.html#Streamcopy)、[音声オフセット](https://ffmpeg.org/ffmpeg.html#Main-options)、[パケット単位のフィルター](https://ffmpeg.org/ffmpeg-bitstream-filters.html#noise)を利用しています。
+Architecture decisions are recorded in [docs/adr](docs/adr), design documents in [docs/specs](docs/specs), and implementation notes in [docs/plans](docs/plans). The implementation uses the [Tauri command API](https://v2.tauri.app/develop/calling-rust/), [FFmpeg stream copy](https://ffmpeg.org/ffmpeg.html#Streamcopy), [audio timestamp offsets](https://ffmpeg.org/ffmpeg.html#Main-options), and [packet bitstream filters](https://ffmpeg.org/ffmpeg-bitstream-filters.html#noise).
 
-macOS の実際の WebView で再生を検証する場合は、別ウィンドウで動く検証用プログラムもあります。動画は読み取るだけで、変換や書き出しは行いません。
+## Native macOS playback probe
+
+To test playback in the macOS WebView, build the frontend and run the standalone probe. It reads the video without converting or exporting it.
 
 ```sh
 pnpm build
@@ -139,6 +140,6 @@ MVE_PLAYBACK_FILE="/path/to/video.mp4" MVE_PROBE_OFFSET="0.25" \
   cargo run --manifest-path src-tauri/Cargo.toml --features tauri/custom-protocol --example playback_probe
 ```
 
-シーク後の音声再開を調べる場合は、200秒以上の動画に対して `MVE_PROBE_MODE=seek` を追加します。停止中・再生中のシークを交互に6回行い、補正後の位置・音声の時計・同期を検証します。
+To test audio recovery after seeking, use a video at least 200 seconds long and set `MVE_PROBE_MODE=seek`. The probe alternates six paused and playing seeks, then checks the corrected position, audio clock, and synchronization.
 
-映像の復号・描画ピクセル、再生時計、音声の補正量とシーク回数を確認し、基準を満たさなければ終了コード 1 を返します。ファイル選択ダイアログとキーフレームの全走査だけを省略し、本番の画面・プレーヤー・ストリーミングを使用します。
+The probe checks decoded frames/rendered pixels, playback clocks, audio offset, and seek counts, and returns exit code 1 if a threshold is missed. It skips only the file picker and full keyframe scan; it uses the production UI, player, and streaming path.

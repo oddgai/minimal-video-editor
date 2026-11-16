@@ -1,27 +1,27 @@
 ---
 id: "NNNN"
-status: Proposed
+status: 提案中
 date: "YYYY-MM-DD"
 ---
 
-# ADR NNNN: Decision title
+# ADR NNNN: 決定のタイトル
 
-## Context
+## 背景
 
-Describe the concrete problem and constraints that made this decision necessary. Keep this section factual and understandable without requiring the reader to open another document.
+この決定が必要になった具体的な問題と制約を説明します。他の文書を開かなくても読めるよう、事実に基づいて記述します。
 
-## Decision
+## 決定
 
-State the durable decision and its scope. Also state what this ADR does not decide and where that decision belongs.
+長期的に維持する決定と適用範囲を明記します。このADRで決めないことと、その決定を行う場所も書きます。
 
-## Consequences
+## 影響
 
-Describe the positive, negative, and neutral consequences, including the tradeoffs future maintainers must preserve or reconsider.
+良い影響、悪い影響、中立的な影響を説明します。将来の保守で維持または再検討すべきトレードオフも含めます。
 
-## Alternatives considered
+## 検討した代替案
 
-- **Alternative:** Why it was considered and why it was not selected.
+- **代替案:** 検討した理由と採用しなかった理由。
 
-## References
+## 参照資料
 
-- `path/to/source` — what it verifies (checked YYYY-MM-DD).
+- `path/to/source` — 確認できる内容（YYYY-MM-DD確認）。
