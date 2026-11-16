@@ -2,3 +2,18 @@
 node = "26.13.0"
 pnpm = "12.16.1"
 rust = "1.99.1"
+actionlint = "1.7.12"
+shellcheck = "0.11.0"
+
+[tasks.ci]
+description = "CIと同じ全検証を順番に実行する"
+run = [
+  "actionlint .github/workflows/ci.yml",
+  "pnpm check",
+  "pnpm test",
+  "pnpm build",
+  "cargo fmt --manifest-path src-tauri/Cargo.toml -- --check",
+  "cargo test --manifest-path src-tauri/Cargo.toml",
+  "cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets -- -D warnings",
+  "pnpm test:ui",
+]
