@@ -129,7 +129,7 @@ pnpm test:ui
 
 Rust の結合テストは実際の FFmpeg で素材を生成し、カット後の映像パケットと音声パケットの SHA-256、B フレームの復号結果、正負の音声オフセット、無音動画、Unicode・空白・引用符を含むパス、上書き防止、キャンセル後の後片付けを確認します。画面テストでは IPC の境界を差し替えてチャプター操作・ショートカットを確認し、生成した実動画で削除後の表示フレーム、末尾停止・再開、音声補正も検証します。OS のネイティブ再生・ダイアログの対話試験は別途必要です。
 
-設計と実装計画は [docs/specs](docs/specs) と [docs/plans](docs/plans) にあります。実装は [Tauri のコマンド API](https://v2.tauri.app/develop/calling-rust/)、[FFmpeg のストリームコピー](https://ffmpeg.org/ffmpeg.html#Streamcopy)、[音声オフセット](https://ffmpeg.org/ffmpeg.html#Main-options)、[パケット単位のフィルター](https://ffmpeg.org/ffmpeg-bitstream-filters.html#noise)を利用しています。
+アーキテクチャ上の決定は [docs/adr](docs/adr)、設計と実装計画は [docs/specs](docs/specs) と [docs/plans](docs/plans) にあります。実装は [Tauri のコマンド API](https://v2.tauri.app/develop/calling-rust/)、[FFmpeg のストリームコピー](https://ffmpeg.org/ffmpeg.html#Streamcopy)、[音声オフセット](https://ffmpeg.org/ffmpeg.html#Main-options)、[パケット単位のフィルター](https://ffmpeg.org/ffmpeg-bitstream-filters.html#noise)を利用しています。
 
 macOS の実際の WebView で再生を検証する場合は、別ウィンドウで動く検証用プログラムもあります。動画は読み取るだけで、変換や書き出しは行いません。
 
