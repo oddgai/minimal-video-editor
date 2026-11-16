@@ -8,7 +8,7 @@
 
 **Tech Stack:** Tauri 2, Rust, TypeScript, Vite, Node test runner, FFmpeg/ffprobe.
 
-**Spec:** `docs/superpowers/specs/2026-11-13-minimal-video-editor-design.md`
+**Spec:** `docs/specs/2026-11-13-minimal-video-editor-design.md`
 
 ## Global Constraints
 - macOS first; Windows-compatible paths, processes, and shortcuts.
