@@ -167,21 +167,25 @@ test('split/select/delete shortcuts compact chapters, preserve history, and expo
   const errors: string[] = []; page.on('pageerror', error => errors.push(error.message));
   await openEditor(page, true);
   for (const id of ['in-point', 'out-point', 'mark-in', 'mark-out', 'prev-frame', 'next-frame']) await expect(page.locator(`#${id}`)).toHaveCount(0);
-  await splitAtFourAndEight(page);
-  await expect(page.locator('.chapter-block[aria-pressed="true"]')).toHaveAttribute('data-index', '2');
-  await page.keyboard.press(`${command}+ArrowLeft`);
-  await expect(page.locator('.chapter-block[aria-pressed="true"]')).toHaveAttribute('data-index', '1');
-  await page.keyboard.press('d');
-  await expect(page.locator('#chapter-lane .chapter-block')).toHaveCount(2);
-  await expect(page.locator('#timeline-duration')).toHaveText('00:00:08.000');
-  await expect(page.locator('#current-time')).toHaveText('00:00:04.000');
-  await expect(page.locator('#jump-button')).toHaveAttribute('title', /00:00:08\.000/);
+  await test.step('Split at keyframes and delete the selected chapter to close the gap', async () => {
+    await splitAtFourAndEight(page);
+    await expect(page.locator('.chapter-block[aria-pressed="true"]')).toHaveAttribute('data-index', '2');
+    await page.keyboard.press(`${command}+ArrowLeft`);
+    await expect(page.locator('.chapter-block[aria-pressed="true"]')).toHaveAttribute('data-index', '1');
+    await page.keyboard.press('d');
+    await expect(page.locator('#chapter-lane .chapter-block')).toHaveCount(2);
+    await expect(page.locator('#timeline-duration')).toHaveText('00:00:08.000');
+    await expect(page.locator('#current-time')).toHaveText('00:00:04.000');
+    await expect(page.locator('#jump-button')).toHaveAttribute('title', /00:00:08\.000/);
+  });
   const layout = await page.locator('#chapter-lane .chapter-block').evaluateAll(nodes => nodes.map(node => ({ left: (node as HTMLElement).style.left, width: (node as HTMLElement).style.width })));
   expect(layout).toEqual([{ left: '0%', width: '50%' }, { left: '50%', width: '50%' }]);
-  await page.keyboard.press('ArrowLeft'); await expect(page.locator('#jump-button')).toHaveAttribute('title', /00:00:02\.000/);
-  await page.keyboard.press('ArrowRight'); await expect(page.locator('#jump-button')).toHaveAttribute('title', /00:00:08\.000/);
-  await page.keyboard.press(`${command}+z`); await expect(page.locator('#chapter-lane .chapter-block')).toHaveCount(3);
-  await page.keyboard.press(`${command}+Shift+z`); await expect(page.locator('#chapter-lane .chapter-block')).toHaveCount(2);
+  await test.step('Undo and redo the deletion, then verify keyframe navigation and chapter selection', async () => {
+    await page.keyboard.press('ArrowLeft'); await expect(page.locator('#jump-button')).toHaveAttribute('title', /00:00:02\.000/);
+    await page.keyboard.press('ArrowRight'); await expect(page.locator('#jump-button')).toHaveAttribute('title', /00:00:08\.000/);
+    await page.keyboard.press(`${command}+z`); await expect(page.locator('#chapter-lane .chapter-block')).toHaveCount(3);
+    await page.keyboard.press(`${command}+Shift+z`); await expect(page.locator('#chapter-lane .chapter-block')).toHaveCount(2);
+  });
   await page.locator('#chapter-lane .chapter-block').first().click();
   await expect(page.locator('.chapter-block[aria-pressed="true"]')).toHaveAttribute('data-index', '0');
   await page.keyboard.press(`${command}+ArrowRight`);
@@ -191,9 +195,11 @@ test('split/select/delete shortcuts compact chapters, preserve history, and expo
   await expect(page.locator('#chapter-lane .chapter-block')).toHaveCount(2);
   await page.keyboard.press(`${command}+e`);
   expect(await page.evaluate(() => (window as unknown as { lastExport?: unknown }).lastExport)).toBeUndefined();
-  await page.keyboard.press(`${command}+s`);
-  await page.getByRole('dialog', { name: /Export/ }).getByRole('button', { name: 'OK', exact: true }).click();
-  await expect(page.getByRole('status')).toContainText('Exported');
+  await test.step('Export the edit and audio offset with Command+S', async () => {
+    await page.keyboard.press(`${command}+s`);
+    await page.getByRole('dialog', { name: /Export/ }).getByRole('button', { name: 'OK', exact: true }).click();
+    await expect(page.getByRole('status')).toContainText('Exported');
+  });
   const payload = await page.evaluate(() => (window as unknown as { lastExport: unknown }).lastExport);
   expect(payload).toMatchObject({ request: { input: '/tmp/旅行 sample.mp4', ranges: [{ start: 0, end: 4 }, { start: 8, end: 12 }], audioOffset: 0.25 } });
   await page.screenshot({ path: 'test-results/chapters.png', fullPage: true });
